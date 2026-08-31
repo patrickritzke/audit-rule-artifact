@@ -350,6 +350,32 @@ function flattenTree(node, parentId, treeId, out, seen) {
   (node.subCompanies || []).forEach(c => flattenTree(c, node.externalId, treeId, out, seen));
 }
 
+/* ─── SECTION FLATTEN (close affiliates / management-board) ─────────────
+   Same idea as flattenTree, but for the two non-tree CorporateFamily
+   sections: tags each row with which section it came from, and accepts
+   an array of top-level entries since a close-affiliate hierarchy can
+   have more than one root (unlike the single-root ownership tree).
+   ASSUMPTION: children live under `.subCompanies`, falling back to
+   `.children`/`.affiliates` — adjust once a real CorporateFamily payload
+   is on hand. Cycle-safe via `seen`. */
+function flattenSection(entries, sectionLabel, out, seen) {
+  function walk(node, parentId) {
+    if (!node || !node.externalId) return;
+    if (seen.has(node.externalId)) return;
+    seen.add(node.externalId);
+    out.push({
+      id:       node.externalId,
+      name:     node.name || node.externalId,
+      title:    node.title || node.role || null,
+      parentId: parentId,
+      section:  sectionLabel
+    });
+    const kids = node.subCompanies || node.children || node.affiliates || [];
+    kids.forEach(c => walk(c, node.externalId));
+  }
+  (entries || []).forEach(e => walk(e, null));
+}
+
 /* ─── CHAIN BUILDER ───────────────────────────────────────────────────── */
 function buildChains(nodes, targetId) {
   const byId = {};
@@ -380,6 +406,63 @@ function buildChains(nodes, targetId) {
   });
 }
 
+/* ─── APPLY SCREENING MAP ───────────────────────────────────────────────
+   Shared between the tree, close-affiliate and board rows — every row is
+   screened against the same map, keyed by external id. Extracted so the
+   AUDIT-Affiliate data isn't only applied to the ownership tree. */
+function applyScreeningMap(rows, screeningMap, targetId, treeRootId, targetFwFull) {
+  rows.forEach(n => {
+    const s = screeningMap[n.id];
+
+    n.marks = n.marks || {};
+    if (n.id === targetId)   n.marks.client  = true;
+    if (n.id === treeRootId) n.marks.ultimate = true;
+
+    if (!s) return;
+
+    n.local            = s.local;
+    n.localStricter    = s.localStricter;
+    n.localStricterWhy = s.localStricterWhy;
+    n.dormant          = s.dormant;
+    n.moodys           = s.moodys;
+    n.moodysNote       = s.moodysNote;
+    n.localWhyList     = s.localWhyList;
+    n.appliedWhyList   = s.appliedWhyList;
+    n.localLabel       = LBL[FWA[s.local]]       || s.local;
+    n.appliedLabel     = LBL[FWA[s.appliedFw]]   || s.appliedFw;
+
+    if (s.treatment) {
+      const originCB = (s.local === s.appliedFw) ? "D" : "I";
+      const fwTokCB  = FWA_REV[s.appliedFw] || "IEP";
+      const code     = fwTokCB + "-" + s.treatment + "GN-" + originCB;
+      const cite     = CITE[s.appliedFw] || "";
+
+      const originA  = (s.local === targetFwFull) ? "D" : "I";
+      const fwTokA   = FWA_REV[targetFwFull] || "IEP";
+      const codeA    = fwTokA + "-" + s.treatment + "GN-" + originA;
+
+      n.code = code;
+      n.cite = cite;
+      n.polCodes = {
+        A: { fw: targetFwFull,  code: codeA, cite: CITE[targetFwFull] || "" },
+        B: { fw: s.appliedFw,   code: code,  cite: cite },
+        C: { fw: s.appliedFw,   code: code,  cite: cite }
+      };
+      n.relationships = [{
+        relationshipType:
+          s.treatment === "R" ? "Restricted" :
+          s.treatment === "M" ? "Materiality" : "Judgment",
+        section: n.treeId ? "Tree" : (n.section || "Tree"),
+        restrictionBasis:
+          s.treatment === "R" ? "automatic" :
+          s.treatment === "M" ? "materiality" : "judgment",
+        screeningCode: code,
+        citation: cite
+      }];
+    }
+  });
+}
+
 /* ─── MAIN LOADER ─────────────────────────────────────────────────────── */
 async function loadSearch() {
   const sid = parseInt(document.getElementById("sid").value);
@@ -396,6 +479,7 @@ async function loadSearch() {
   btn.disabled = true;
 
   try {
+    // Step 1 — the search and its search parties.
     const raw = await celeste.query(
       "intapp_compliance__get_conflicts_search",
       { searchId: sid, propertiesToLoad: ["SearchParties"] }
@@ -407,19 +491,37 @@ async function loadSearch() {
     const parties = search.searchParties || [];
     if (!parties.length) throw new Error("Search " + sid + " has no search parties.");
 
+    // Step 2 — find the AUDIT-Target party and its partyId.
     const targetParty = parties.find(p =>
       p.affiliationType === "AUDIT-Target" ||
       p.affiliationType === "Audit Client"
     );
     if (!targetParty) throw new Error("No AUDIT-Target party found in search " + sid + ".");
 
+    const targetPartyId = targetParty.partyId || targetParty.id;
+    if (!targetPartyId) throw new Error("AUDIT-Target party record has no partyId — cannot fetch its corporate family.");
+
     const tgtNotes = JSON.parse(targetParty.notes || "{}");
     const targetId   = tgtNotes.x || targetParty.name;
     const targetFwTok = tgtNotes.l || "IEP";
     const targetFwFull = FW_FULL[targetFwTok] || "IESBA";
 
-    const treeEntry = (targetParty.corporateTrees || [])[0];
-    if (!treeEntry || !treeEntry.rootCompany) throw new Error("AUDIT-Target party has no corporate tree. Ensure the party was added with a tree attached.");
+    // Step 2b — get_party(partyId, CorporateFamily): tree, significant
+    // relationships (close affiliates) and management/board.
+    // ASSUMPTION: exact response shape is a best guess pending a real
+    // sample from Intapp — extractObj + the fallback keys below make this
+    // tolerant of a slightly different envelope or key naming; adjust once
+    // a live response is available.
+    const familyRaw = await celeste.query(
+      "intapp_compliance__get_party",
+      { partyId: targetPartyId, propertiesToLoad: ["CorporateFamily"] }
+    );
+    const familyEnv = extractObj(familyRaw, "corporateFamily") || extractObj(familyRaw, "corporateTrees") || extractObj(familyRaw, null);
+    if (!familyEnv) throw new Error("Could not parse get_party response for party " + targetPartyId + ". Raw: " + JSON.stringify(familyRaw).slice(0,200));
+    const corpFamily = familyEnv.corporateFamily || familyEnv;
+
+    const treeEntry = (corpFamily.corporateTrees || corpFamily.trees || [])[0];
+    if (!treeEntry || !treeEntry.rootCompany) throw new Error("Party " + targetPartyId + " has no corporate tree in its CorporateFamily data.");
 
     const treeRootId = treeEntry.rootCompanyId || treeEntry.rootCompany.externalId;
     const treeName   = treeEntry.name || treeEntry.rootCompany.name;
@@ -427,9 +529,21 @@ async function loadSearch() {
     const nodes = [];
     flattenTree(treeEntry.rootCompany, null, treeRootId, nodes, new Set());
 
+    const significantRaw = corpFamily.closeAffiliates || corpFamily.significantRelationships || [];
+    const significant = [];
+    flattenSection(significantRaw, "closeAffiliates", significant, new Set());
+
+    const boardRaw = corpFamily.board || corpFamily.managementBoard || [];
+    const board = [];
+    flattenSection(boardRaw, "managementBoard", board, new Set());
+
+    // Step 3 — AUDIT-Affiliate parties: relationship + notes, parsed into
+    // the screening map keyed by each entity's external id.
     const screeningMap = {};
     parties
-      .filter(p => p.affiliationType === "AUDIT-Rule" ||
+      .filter(p => p.affiliationType === "AUDIT-Affiliate" ||
+                   p.affiliationType === "Audit Affiliate" ||
+                   p.affiliationType === "AUDIT-Rule" ||
                    p.affiliationType === "Audit Rule Affiliate")
       .forEach(p => {
         const n = JSON.parse(p.notes || "{}");
@@ -458,56 +572,9 @@ async function loadSearch() {
         };
       });
 
-    nodes.forEach(n => {
-      const s = screeningMap[n.id];
-
-      n.marks = {};
-      if (n.id === targetId)   n.marks.client  = true;
-      if (n.id === treeRootId) n.marks.ultimate = true;
-
-      if (!s) return;
-
-      n.local            = s.local;
-      n.localStricter    = s.localStricter;
-      n.localStricterWhy = s.localStricterWhy;
-      n.dormant          = s.dormant;
-      n.moodys           = s.moodys;
-      n.moodysNote       = s.moodysNote;
-      n.localWhyList     = s.localWhyList;
-      n.appliedWhyList   = s.appliedWhyList;
-      n.localLabel       = LBL[FWA[s.local]]       || s.local;
-      n.appliedLabel     = LBL[FWA[s.appliedFw]]   || s.appliedFw;
-
-      if (s.treatment) {
-        const originCB = (s.local === s.appliedFw) ? "D" : "I";
-        const fwTokCB  = FWA_REV[s.appliedFw] || "IEP";
-        const code     = fwTokCB + "-" + s.treatment + "GN-" + originCB;
-        const cite     = CITE[s.appliedFw] || "";
-
-        const originA  = (s.local === targetFwFull) ? "D" : "I";
-        const fwTokA   = FWA_REV[targetFwFull] || "IEP";
-        const codeA    = fwTokA + "-" + s.treatment + "GN-" + originA;
-
-        n.code = code;
-        n.cite = cite;
-        n.polCodes = {
-          A: { fw: targetFwFull,  code: codeA, cite: CITE[targetFwFull] || "" },
-          B: { fw: s.appliedFw,   code: code,  cite: cite },
-          C: { fw: s.appliedFw,   code: code,  cite: cite }
-        };
-        n.relationships = [{
-          relationshipType:
-            s.treatment === "R" ? "Restricted" :
-            s.treatment === "M" ? "Materiality" : "Judgment",
-          section: "Tree",
-          restrictionBasis:
-            s.treatment === "R" ? "automatic" :
-            s.treatment === "M" ? "materiality" : "judgment",
-          screeningCode: code,
-          citation: cite
-        }];
-      }
-    });
+    applyScreeningMap(nodes,       screeningMap, targetId, treeRootId, targetFwFull);
+    applyScreeningMap(significant, screeningMap, targetId, treeRootId, targetFwFull);
+    applyScreeningMap(board,       screeningMap, targetId, treeRootId, targetFwFull);
 
     buildChains(nodes, targetId);
 
@@ -519,9 +586,9 @@ async function loadSearch() {
       engagementFramework: targetFwFull,
       trees:               [{ id: treeRootId, name: treeName }],
       nodes:               nodes,
-      sections:            { significant: [], board: [] },
+      sections:            { significant: significant, board: board },
       sectionModes:        { significant: "tree", board: "flat" },
-      sectionCounts:       { significant: 0, board: 0 },
+      sectionCounts:       { significant: significant.length, board: board.length },
       legend: {
         R: { label:"Restricted — by rule",            rule: CITE[targetFwFull]||"", help:"Control-based. No further test." },
         M: { label:"Materiality — screener runs test", rule: CITE[targetFwFull]||"", help:"Classified from structure; the screening application runs the test." }
