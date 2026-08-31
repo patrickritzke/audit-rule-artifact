@@ -234,6 +234,12 @@ select:focus{outline:1px solid var(--color-primary-light);outline-offset:1px}
 </div>
 </div>
 <script>
+/* ─── RUNTIME BRIDGE ──────────────────────────────────────────────────
+   The editor renders this page inside an iframe; the celeste bridge only
+   exists on the parent frame. Safe when unframed too, since window.parent
+   === window in that case. */
+const celeste = window.parent.celeste;
+
 /* ─── DICTIONARIES (verbatim from independence-tree-display template) ──── */
 const FWC={"SEC/PCAOB":["#8C1D1D","#FBEAEA","#F0CCCC"],"EU-537":["#0E54A9","#E4EDFA","#C2D6EF"],
 "UK-FRC":["#3A3A9E","#E9EAFA","#CDCFF0"],"IESBA":["#0F5F49","#E3F2EC","#C0E0D3"],
