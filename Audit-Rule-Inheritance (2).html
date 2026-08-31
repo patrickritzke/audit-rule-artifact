@@ -350,30 +350,41 @@ function flattenTree(node, parentId, treeId, out, seen) {
   (node.subCompanies || []).forEach(c => flattenTree(c, node.externalId, treeId, out, seen));
 }
 
-/* ─── SECTION FLATTEN (close affiliates / management-board) ─────────────
-   Same idea as flattenTree, but for the two non-tree CorporateFamily
-   sections: tags each row with which section it came from, and accepts
-   an array of top-level entries since a close-affiliate hierarchy can
-   have more than one root (unlike the single-root ownership tree).
-   ASSUMPTION: children live under `.subCompanies`, falling back to
-   `.children`/`.affiliates` — adjust once a real CorporateFamily payload
-   is on hand. Cycle-safe via `seen`. */
+/* ─── SECTION FLATTEN (close affiliates / board members) ─────────────────
+   Same idea as flattenTree, but for the two non-tree get_party sections.
+   Confirmed against a live get_party(CorporateFamily) response:
+   - closeAffiliates entries use `id` (not externalId) and recurse via a
+     same-named `closeAffiliates` child array.
+   - boardMembers entries use `id`, `name`, `title`, no children.
+   Tags each row with which section it came from; accepts an array of
+   top-level entries since close affiliates can have more than one root
+   (unlike the single-root ownership tree). Cycle-safe via `seen`. */
 function flattenSection(entries, sectionLabel, out, seen) {
   function walk(node, parentId) {
-    if (!node || !node.externalId) return;
-    if (seen.has(node.externalId)) return;
-    seen.add(node.externalId);
+    const id = node && (node.externalId || node.id);
+    if (!id) return;
+    if (seen.has(id)) return;
+    seen.add(id);
     out.push({
-      id:       node.externalId,
-      name:     node.name || node.externalId,
+      id:       id,
+      name:     node.name || id,
       title:    node.title || node.role || null,
+      shareHoldingPercentage: node.shareHoldingPercentage != null ? node.shareHoldingPercentage : null,
       parentId: parentId,
       section:  sectionLabel
     });
-    const kids = node.subCompanies || node.children || node.affiliates || [];
-    kids.forEach(c => walk(c, node.externalId));
+    const kids = node.closeAffiliates || node.subCompanies || node.children || node.affiliates || [];
+    kids.forEach(c => walk(c, id));
   }
   (entries || []).forEach(e => walk(e, null));
+}
+
+/* get_party wraps closeAffiliates/boardMembers as {..., <key>: [...]}
+   rather than a bare array — unwrap either shape. */
+function unwrapList(val, key) {
+  if (Array.isArray(val)) return val;
+  if (val && Array.isArray(val[key])) return val[key];
+  return [];
 }
 
 /* ─── CHAIN BUILDER ───────────────────────────────────────────────────── */
@@ -507,20 +518,18 @@ async function loadSearch() {
     const targetFwFull = FW_FULL[targetFwTok] || "IESBA";
 
     // Step 2b — get_party(partyId, CorporateFamily): tree, significant
-    // relationships (close affiliates) and management/board.
-    // ASSUMPTION: exact response shape is a best guess pending a real
-    // sample from Intapp — extractObj + the fallback keys below make this
-    // tolerant of a slightly different envelope or key naming; adjust once
-    // a live response is available.
+    // relationships (close affiliates) and management/board. Response is
+    // the party record itself (no corporateFamily wrapper) carrying
+    // corporateTrees / shareholders / closeAffiliates / boardMembers as
+    // sibling fields — confirmed against a live sample.
     const familyRaw = await celeste.query(
       "intapp_compliance__get_party",
       { partyId: targetPartyId, propertiesToLoad: ["CorporateFamily"] }
     );
-    const familyEnv = extractObj(familyRaw, "corporateFamily") || extractObj(familyRaw, "corporateTrees") || extractObj(familyRaw, null);
-    if (!familyEnv) throw new Error("Could not parse get_party response for party " + targetPartyId + ". Raw: " + JSON.stringify(familyRaw).slice(0,200));
-    const corpFamily = familyEnv.corporateFamily || familyEnv;
+    const corpFamily = extractObj(familyRaw, "corporateTrees") || extractObj(familyRaw, null);
+    if (!corpFamily) throw new Error("Could not parse get_party response for party " + targetPartyId + ". Raw: " + JSON.stringify(familyRaw).slice(0,200));
 
-    const treeEntry = (corpFamily.corporateTrees || corpFamily.trees || [])[0];
+    const treeEntry = (corpFamily.corporateTrees || [])[0];
     if (!treeEntry || !treeEntry.rootCompany) throw new Error("Party " + targetPartyId + " has no corporate tree in its CorporateFamily data.");
 
     const treeRootId = treeEntry.rootCompanyId || treeEntry.rootCompany.externalId;
@@ -529,11 +538,11 @@ async function loadSearch() {
     const nodes = [];
     flattenTree(treeEntry.rootCompany, null, treeRootId, nodes, new Set());
 
-    const significantRaw = corpFamily.closeAffiliates || corpFamily.significantRelationships || [];
+    const significantRaw = unwrapList(corpFamily.closeAffiliates, "closeAffiliates");
     const significant = [];
     flattenSection(significantRaw, "closeAffiliates", significant, new Set());
 
-    const boardRaw = corpFamily.board || corpFamily.managementBoard || [];
+    const boardRaw = unwrapList(corpFamily.boardMembers, "boardMembers");
     const board = [];
     flattenSection(boardRaw, "managementBoard", board, new Set());
 
