@@ -1,0 +1,836 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Independence Screening Tree</title>
+<style>
+:root{
+  --color-primary:#0E54A9; --color-primary-light:#207CEC;
+  --color-ink:#021123; --color-text:#253955; --color-body:#021123; --color-muted:#888888;
+  --color-surface:#FFFFFF; --color-surface-alt:#FAFAFA; --color-border:#CAD2DB;
+  --color-hairline:#E7EBEF;
+  --font-base:Manrope,Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --fs-body:16px; --fs-body-lg:18px; --fs-small:12px;
+  --fs-h4:24px; --fs-h3:36px; --fs-h2:48px;
+  --lh-body:24px;
+  --fw-regular:400; --fw-medium:500; --fw-semibold:600; --fw-bold:700;
+  --radius-sm:4px; --radius-md:6px;
+  --container-max:1152px;
+}
+*{box-sizing:border-box}
+body{font-family:var(--font-base);font-size:var(--fs-body);line-height:var(--lh-body);
+     color:var(--color-body);background:var(--color-surface-alt);margin:0;padding:0}
+.wrap{max-width:var(--container-max);margin:0 auto;padding:40px 24px 48px}
+.hdr{margin-bottom:26px}
+.hdr h1{font-size:var(--fs-h4);font-weight:var(--fw-semibold);line-height:1.25;
+        color:var(--color-ink);margin:0;letter-spacing:-.2px}
+.hdr .tfor{font-size:var(--fs-body);font-weight:var(--fw-medium);color:var(--color-text);margin-top:5px}
+.hdr .tguo{font-size:var(--fs-small);font-weight:var(--fw-regular);color:var(--color-muted);margin-top:2px}
+.bar{background:var(--color-surface);border:1px solid var(--color-hairline);
+     border-radius:var(--radius-md);margin-bottom:10px;
+     padding:12px 14px;display:flex;gap:20px;flex-wrap:wrap}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.ctl label{font-size:10px;color:var(--color-muted);text-transform:uppercase;
+           letter-spacing:.5px;font-weight:var(--fw-semibold)}
+select{font:inherit;font-size:13px;padding:6px 9px;border:1px solid var(--color-border);
+       border-radius:var(--radius-sm);background:var(--color-surface);color:var(--color-text);min-width:270px}
+select:focus{outline:1px solid var(--color-primary-light);outline-offset:1px}
+.layout{display:block}
+.treebox{background:var(--color-surface);border:1px solid var(--color-hairline);
+         border-radius:var(--radius-md)}
+.ovl{display:none;position:fixed;inset:0;background:rgba(2,17,35,.40);z-index:50;
+     align-items:flex-start;justify-content:center;padding:56px 20px;overflow:auto}
+.ovl.open{display:flex}
+.modal{background:var(--color-surface);border:1px solid var(--color-hairline);
+       border-radius:var(--radius-md);width:470px;max-width:100%;max-height:82vh;overflow:auto}
+.treebox{padding:12px 8px 12px 12px;max-height:76vh;overflow:auto}
+.thead,.n{display:grid;grid-template-columns:92px 66px minmax(0,1fr) 66px;
+          align-items:center;column-gap:10px}
+.thead{position:sticky;top:0;z-index:1;background:var(--color-surface);
+       border-bottom:1px solid var(--color-hairline);padding:0 7px 5px;margin-bottom:3px}
+.thead span{font-size:9px;text-transform:uppercase;letter-spacing:.5px;
+            color:var(--color-muted);font-weight:var(--fw-semibold)}
+.n{padding:2px 7px;border-radius:var(--radius-sm);cursor:pointer;
+   font-size:12.5px;line-height:1.75;transition:background .12s ease}
+.n:hover{background:#F4F6F8}
+.n.sel{background:#EFF4FA}
+.n.tgt{background:#EFF4FA;box-shadow:inset 2px 0 0 var(--color-primary);font-weight:var(--fw-semibold)}
+.n.tgt:hover{background:#E6EEF8}
+.c-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-app,.c-loc,.c-ac{min-width:0;white-space:nowrap}
+.c-app .badge,.c-loc .badge{margin-left:0}
+.c-ac{display:flex;align-items:center;gap:3px}
+.ico{cursor:help;font-size:11.5px;line-height:1;opacity:.9}
+.ico:hover{opacity:1}
+.nm{color:var(--color-text);font-weight:var(--fw-regular)}
+.n.sel .nm{color:var(--color-ink)}
+.n.tgt .nm{color:var(--color-primary);font-weight:var(--fw-semibold)}
+.id{color:#B4BCC5;font-size:10.5px;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.badge{display:inline-block;cursor:help;padding:1px 7px;border-radius:10px;font-size:9.5px;
+       font-weight:var(--fw-semibold);font-family:var(--font-base);letter-spacing:.2px}
+.dot{color:#C98A12;font-size:10px;margin-left:6px}
+.tabs{display:flex;gap:2px;margin-bottom:-1px;position:relative;z-index:2}
+.tb{display:flex;align-items:center;gap:7px;background:var(--color-surface-alt);
+    border:1px solid var(--color-hairline);border-bottom-color:var(--color-hairline);
+    border-radius:var(--radius-sm) var(--radius-sm) 0 0;padding:7px 12px;font:inherit;
+    cursor:pointer;color:var(--color-muted);transition:all .15s ease}
+.tb:hover{background:var(--color-surface);color:var(--color-text)}
+.tb.on{background:var(--color-surface);border-bottom-color:var(--color-surface);
+       color:var(--color-ink);box-shadow:inset 0 2px 0 var(--color-primary)}
+.tbl{font-size:11.5px;font-weight:var(--fw-semibold)}
+.tbs{font-size:10px;color:var(--color-muted);font-weight:var(--fw-regular)}
+.tb.on .tbs{color:var(--color-text)}
+.tbn{font-size:10px;font-weight:var(--fw-semibold);color:var(--color-muted);
+     background:var(--color-surface-alt);border:1px solid var(--color-hairline);
+     border-radius:9px;padding:0 6px;font-variant-numeric:tabular-nums}
+.tb.on .tbn{background:#EFF4FA;border-color:#D8E7FA;color:var(--color-primary)}
+.treebox{border-top-left-radius:0}
+.empty{padding:34px 12px;text-align:center;color:var(--color-muted);font-size:12px}
+.ph{padding:13px 40px 13px 15px;border-bottom:1px solid var(--color-hairline);
+    background:var(--color-surface);border-radius:var(--radius-md) var(--radius-md) 0 0;
+    position:sticky;top:0;z-index:1}
+.ph h2{margin:0;font-size:15px;font-weight:var(--fw-semibold);line-height:1.35;color:var(--color-ink)}
+.ph .pid{color:var(--color-muted);font-size:10.5px;margin-top:3px}
+.cls{position:absolute;top:10px;right:10px;width:24px;height:24px;
+     border:1px solid var(--color-hairline);background:var(--color-surface);color:var(--color-muted);
+     border-radius:var(--radius-sm);font-size:15px;line-height:1;cursor:pointer;padding:0;
+     transition:all .18s ease}
+.cls:hover{background:var(--color-surface-alt);color:var(--color-ink)}
+.pc{padding:14px 15px}
+.sec{margin-bottom:16px}
+.sec h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--color-muted);
+        font-weight:var(--fw-semibold);margin:0 0 6px;line-height:1.4}
+.codeline{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.codetxt{font-family:var(--font-mono);font-size:13.5px;font-weight:var(--fw-semibold);
+         letter-spacing:.3px;color:var(--color-ink)}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:4px 10px;font-size:11.5px;align-items:baseline}
+.kv dt{color:var(--color-muted)}.kv dd{margin:0;color:var(--color-text)}
+.why{background:var(--color-surface-alt);border-left:2px solid var(--color-hairline);
+     padding:8px 10px;font-size:11.5px;line-height:1.65;
+     border-radius:0 var(--radius-sm) var(--radius-sm) 0;color:var(--color-text)}
+.ptabs{display:flex;gap:2px;padding:0 10px;border-bottom:1px solid var(--color-hairline);
+       background:var(--color-surface)}
+.ptb{background:none;border:none;border-bottom:2px solid transparent;padding:8px 9px;font:inherit;
+     font-size:10.5px;color:var(--color-muted);cursor:pointer}
+.ptb:hover{color:var(--color-text)}
+.ptb.on{color:var(--color-ink);border-bottom-color:var(--color-primary)}
+.psh{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--color-muted);
+     font-weight:var(--fw-semibold);margin:0 0 7px}
+.prow{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--color-ink)}
+.prow .badge{margin-left:0;flex:0 0 auto}
+.pw{background:var(--color-surface-alt);border-left:2px solid var(--color-border);
+    padding:8px 10px;margin-top:8px}
+.pwh{font-size:10.5px;font-weight:var(--fw-semibold);color:var(--color-ink);margin-bottom:3px}
+.pw ul{margin:0;padding-left:15px}
+.pw li{font-size:11.5px;line-height:1.6;color:var(--color-text);margin-bottom:2px}
+.hr{display:grid;grid-template-columns:18px 18px minmax(0,1fr);align-items:center;gap:5px;
+    padding:2px 5px;border-radius:var(--radius-sm);font-size:11.5px;color:var(--color-text)}
+.hr.me{background:#EFF4FA;color:var(--color-ink);font-weight:var(--fw-semibold)}
+.hi{font-size:11px;text-align:center;line-height:1}
+.hn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prl{margin:0;padding-left:15px}
+.prl li{font-size:11.5px;line-height:1.75;color:var(--color-text)}
+.pstr{font-size:9px;font-weight:var(--fw-semibold);color:#fff;background:var(--color-primary);
+      border-radius:9px;padding:0 6px;margin-left:6px}
+.pblk{font-size:9px;font-weight:var(--fw-semibold);color:#8C1D1D;background:#FBEAEA;
+      border:1px solid #F0CCCC;border-radius:9px;padding:0 6px;margin-left:6px}
+.pnote{margin-top:9px;padding:8px 10px;background:#FFF8E8;border-left:2px solid #C98A12;
+       font-size:11px;line-height:1.6;color:#5C3D05}
+.legend{display:block;margin-bottom:10px}
+.fgrid{background:var(--color-surface);border:1px solid var(--color-hairline);
+       border-radius:var(--radius-md);padding:9px 12px;display:grid;
+       align-items:center;row-gap:7px;column-gap:9px}
+.flabel{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--color-muted);
+        font-weight:var(--fw-semibold);padding-right:0;white-space:nowrap;line-height:1.35}
+.fcell{display:flex;align-items:center;justify-content:flex-start;min-height:18px;min-width:0}
+.fstack{flex-direction:column;align-items:flex-start;gap:3px}
+.fnone{font-size:11px;font-style:italic;color:#B4BCC5}
+.lg{display:inline-block;cursor:pointer;padding:1px 7px;border-radius:11px;font-size:9.5px;
+    font-weight:var(--fw-semibold);font-family:var(--font-base);letter-spacing:.2px;
+    white-space:nowrap;transition:opacity .15s ease,box-shadow .15s ease}
+.lg:hover{box-shadow:0 0 0 2px var(--color-hairline)}
+.lg.on{box-shadow:0 0 0 2px var(--color-primary)}
+.lg.dim{opacity:.34}
+.sech{display:flex;align-items:center;justify-content:space-between;margin:0 0 5px;padding:0 2px}
+.sect{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--color-muted);font-weight:var(--fw-semibold)}
+.chev{background:none;border:none;padding:1px 3px;font:inherit;font-size:10px;line-height:1;
+      color:var(--color-muted);cursor:pointer;transition:color .15s ease}
+.chev:hover{color:var(--color-primary)}
+.keyrow{display:flex;gap:15px;flex-wrap:wrap;margin:0 0 6px;padding:0 3px}
+.kk{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--color-muted)}
+.kico{font-size:11.5px;line-height:1}
+.tname{color:var(--color-primary);font-weight:var(--fw-semibold)}
+.infobar{margin:0 0 10px}
+.ibtn{display:inline-flex;align-items:center;gap:7px;background:none;border:none;padding:0;
+      font:inherit;font-size:11.5px;color:var(--color-muted);cursor:pointer}
+.ibtn:hover{color:var(--color-primary)}
+.iq{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;
+    border:1px solid var(--color-border);border-radius:50%;font-size:9.5px;
+    font-weight:var(--fw-semibold);line-height:1}
+.ibtn:hover .iq{border-color:var(--color-primary);color:var(--color-primary)}
+.info{display:none}
+.info.open{display:block;
+           background:var(--color-surface);border:1px solid var(--color-hairline);
+           border-radius:var(--radius-md);padding:13px 15px;margin-bottom:14px}
+.isec .ih{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--color-muted);
+          font-weight:var(--fw-semibold);margin-bottom:7px}
+.iopt{display:flex;gap:7px;padding:5px 7px;border-radius:var(--radius-sm);margin-bottom:2px;
+      font-size:11.5px;line-height:1.55;color:var(--color-muted)}
+.iopt.on{background:#EFF4FA;color:var(--color-text)}
+.ick{width:11px;flex:0 0 11px;color:var(--color-primary);font-size:10px;line-height:1.7}
+.itxt b{display:block;font-weight:var(--fw-semibold);color:var(--color-text);margin-bottom:1px}
+.iopt.on .itxt b{color:var(--color-ink)}
+/* loader-only styles */
+#loader { max-width:480px; margin:60px auto; padding:32px 24px;
+          background:#fff; border:1px solid #E7EBEF; border-radius:6px; }
+#loader h2 { font-size:16px; font-weight:600; margin:0 0 16px; color:#021123; }
+#loader label { font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+                color:#888; font-weight:600; display:block; margin-bottom:6px; }
+#loader input { width:100%; padding:8px 10px; border:1px solid #CAD2DB;
+                border-radius:4px; font:inherit; font-size:14px; margin-bottom:12px; }
+#loader button { padding:8px 20px; background:#0E54A9; color:#fff; border:none;
+                 border-radius:4px; font:inherit; font-size:13px; font-weight:600;
+                 cursor:pointer; }
+#loader button:hover { background:#207CEC; }
+#lerr { display:block; margin-top:10px; font-size:12px; color:#8C1D1D; }
+#app { display:none; }
+</style></head><body>
+
+<div id="loader">
+  <h2>Independence Screening Tree</h2>
+  <label for="sid">Conflicts Search ID</label>
+  <input id="sid" type="number" placeholder="e.g. 17092" />
+  <button onclick="loadSearch()">Load</button>
+  <span id="lerr"></span>
+</div>
+
+<div id="app">
+<div class="wrap">
+<div class="hdr">
+  <h1 id="ttl">Independence Rule Inheritance</h1>
+  <div class="tfor" id="tfor"></div>
+  <div class="tguo" id="tguo"></div>
+</div>
+
+<div class="sech"><span class="sect">Options</span>
+  <button class="chev" id="infobtn" aria-expanded="false" aria-controls="desc" title="Show what these options mean">&#9662;</button></div>
+<div class="bar">
+  <div class="ctl"><label for="policy">Applied rule framework</label><select id="policy"></select></div>
+</div>
+<div class="info" id="desc"></div>
+
+<div class="sech"><span class="sect">Filters</span></div>
+<div class="legend" id="lgd"></div>
+
+<div class="keyrow">
+  <span class="kk"><span class="kico">&#9670;</span>Target entity</span>
+  <span class="kk"><span class="kico">&#128081;</span>Ultimate owner</span>
+  <span class="kk"><span class="kico">&#128211;</span>Existing audit client</span>
+  <span class="kk"><span class="kico">&#128188;</span>Existing non-audit client</span>
+</div>
+<div class="tabs" id="tabs"></div>
+
+<div class="layout" id="layout">
+  <div class="treebox" id="tree"></div>
+</div>
+<div class="ovl" id="ovl"><div class="modal"><div id="panel"></div></div></div>
+</div>
+</div>
+<script>
+/* ─── DICTIONARIES (verbatim from independence-tree-display template) ──── */
+const FWC={"SEC/PCAOB":["#8C1D1D","#FBEAEA","#F0CCCC"],"EU-537":["#0E54A9","#E4EDFA","#C2D6EF"],
+"UK-FRC":["#3A3A9E","#E9EAFA","#CDCFF0"],"IESBA":["#0F5F49","#E3F2EC","#C0E0D3"],
+"IESBA-PIE":["#0F5F49","#E3F2EC","#C0E0D3"],"AICPA":["#7A4A12","#FBF1DE","#F0DDB4"],
+"UNKNOWN":["#253955","#F0F2F5","#DDE2E8"]};
+const LBL={SEC:"US Securities and Exchange Commission, Rule 2-01",AIC:"American Institute of Certified Public Accountants, Code of Professional Conduct",IES:"International Ethics Standards Board for Accountants, Code of Ethics",EU5:"European Union, Audit Regulation 537/2014",UKF:"Financial Reporting Council, Ethical Standard for Auditors",UNK:"Not determined"};
+const FWA={"SEC/PCAOB":"SEC","AICPA":"AIC","IESBA":"IES","IESBA-PIE":"IES",
+"EU-537":"EU5","UK-FRC":"UKF","UNKNOWN":"UNK"};
+const TREAT={R:["Restricted","Control-based. The rule applies no further test — block the hit."],
+M:["Materiality","Classified from structure; the screening application runs the test."],
+J:["Judgment","In scope only under the general standard — route to a reviewer."],
+X:["Excluded","Determined out of scope downstream. This skill never emits X."]};
+const POLICY={
+ "C":["Stricter (Target Entity vs. Local vs. Other Rule Inheritance)",
+   "For each entity, the strictest of three: the target entity's framework, the entity's own local regime, and any other audit client in this group whose framework reaches it."],
+ "B":["Stricter (Target Entity vs. Local)",
+   "For each entity, whichever is stricter - the target entity's framework, or that entity's own local regime. Other audit clients are ignored."],
+ "A":["Target Entity Jurisdiction Only",
+   "The framework recorded on the target entity governs every entity in the report. Each entity's own regime is still resolved and shown, but never applied."]};
+const TBAR={R:{w:"5px",st:"solid",c:null},M:{w:"5px",st:"solid",c:"#C98A12"},J:{w:"5px",st:"dotted",c:"#888888"}};
+const TLABEL={R:"Restricted — by rule",M:"Materiality — screener runs the test",J:"Judgment",X:"Excluded — no badge"};
+
+/* ─── EXTRA DICTIONARIES (needed to translate the raw celeste payload
+   into the DATA shape above — not part of the display template) ────────── */
+const FWA_REV={
+  "SEC/PCAOB":"SEC","UK-FRC":"UKF","EU-537":"EU5",
+  "IESBA-PIE":"IES","IESBA":"IEP","AICPA":"AIC"
+};
+const FW_FULL={
+  IEP:"IESBA", IES:"IESBA-PIE", SEC:"SEC/PCAOB",
+  UKF:"UK-FRC", EU5:"EU-537", AIC:"AICPA"
+};
+const CITE={
+  "SEC/PCAOB": "17 CFR 210.2-01",
+  "UK-FRC":    "FRC Ethical Standard 2019",
+  "EU-537":    "Regulation (EU) 537/2014",
+  "IESBA-PIE": "IESBA Code of Ethics, Section 600",
+  "IESBA":     "IESBA Code of Ethics, Section 400",
+  "AICPA":     "AICPA Code of Professional Conduct, 1.224"
+};
+const RT_MAP={
+  "SEC/PCAOB — Restricted":        { fw:"SEC/PCAOB",  t:"R" },
+  "SEC/PCAOB — Materiality":       { fw:"SEC/PCAOB",  t:"M" },
+  "SEC/PCAOB — Judgment":          { fw:"SEC/PCAOB",  t:"J" },
+  "FRC Ethical Standard — Restricted":  { fw:"UK-FRC", t:"R" },
+  "FRC Ethical Standard — Materiality": { fw:"UK-FRC", t:"M" },
+  "FRC Ethical Standard — Judgment":    { fw:"UK-FRC", t:"J" },
+  "EU Audit Regulation — Restricted":   { fw:"EU-537", t:"R" },
+  "EU Audit Regulation — Materiality":  { fw:"EU-537", t:"M" },
+  "EU Audit Regulation — Judgment":     { fw:"EU-537", t:"J" },
+  "IESBA PIE — Restricted":        { fw:"IESBA-PIE", t:"R" },
+  "IESBA PIE — Materiality":       { fw:"IESBA-PIE", t:"M" },
+  "IESBA PIE — Judgment":          { fw:"IESBA-PIE", t:"J" },
+  "IESBA (non-PIE) — Restricted":  { fw:"IESBA",     t:"R" },
+  "IESBA (non-PIE) — Materiality": { fw:"IESBA",     t:"M" },
+  "IESBA (non-PIE) — Judgment":    { fw:"IESBA",     t:"J" },
+  "AICPA Independence — Restricted":  { fw:"AICPA",  t:"R" },
+  "AICPA Independence — Materiality": { fw:"AICPA",  t:"M" },
+  "AICPA Independence — Judgment":    { fw:"AICPA",  t:"J" }
+};
+const WHY={
+  AUD: "This entity is the target entity under audit.",
+  GU:  "This entity is the global ultimate owner of the target entity.",
+  DP:  "This entity is a direct parent of the target entity.",
+  IP:  "This entity is an indirect parent of the target entity.",
+  CTRL:"Control-based rule applies — the entity controls or is controlled by the target.",
+  CC:  "This entity is under common control with the target entity.",
+  SH:  "This entity holds a significant shareholding in the target entity.",
+  CA:  "This entity is a close affiliate of the target entity.",
+  MAT: "Materiality test applies — the screener application runs the test.",
+  DRV: "Framework derived from entity's country of incorporation."
+};
+function whyText(code){ return WHY[code] || ("Country code " + code + " — framework derived from country of incorporation."); }
+
+/* ─── CELESTE RESPONSE UNWRAPPER ─────────────────────────────────────────
+   celeste.query returns an array of content blocks: [{type:"text",text:{...}}]
+   This pulls out the first object carrying the required key, unwrapping one
+   level of envelope (result/data/value/payload) if needed.                 */
+function extractObj(raw, key) {
+  if (!raw) return null;
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && (key ? key in raw : true)) return raw;
+  if (Array.isArray(raw)) {
+    for (const b of raw) {
+      const v = b?.text ?? b?.content ?? b?.value ?? b?.data ?? b;
+      if (typeof v === "string") {
+        try { const p = JSON.parse(v); if (!key || key in p) return p; } catch {}
+      }
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        if (!key || key in v) return v;
+        for (const env of ["result","data","value","payload"]) {
+          if (v[env] && typeof v[env] === "object" && (!key || key in v[env])) return v[env];
+        }
+      }
+    }
+  }
+  if (typeof raw === "string") {
+    try { const p = JSON.parse(raw); if (!key || key in p) return p; } catch {}
+  }
+  return null;
+}
+
+/* ─── TREE FLATTEN ────────────────────────────────────────────────────── */
+function flattenTree(node, parentId, treeId, out, seen) {
+  if (!node || !node.externalId) return;
+  if (seen.has(node.externalId)) return;
+  seen.add(node.externalId);
+  out.push({
+    id:       node.externalId,
+    name:     node.name || node.externalId,
+    country:  node.country || null,
+    parentId: parentId,
+    treeId:   treeId
+  });
+  (node.subCompanies || []).forEach(c => flattenTree(c, node.externalId, treeId, out, seen));
+}
+
+/* ─── CHAIN BUILDER ───────────────────────────────────────────────────── */
+function buildChains(nodes, targetId) {
+  const byId = {};
+  nodes.forEach(n => byId[n.id] = n);
+
+  function pathTo(id) {
+    const path = [];
+    let cur = byId[id];
+    const visited = new Set();
+    while (cur && !visited.has(cur.id)) {
+      visited.add(cur.id);
+      path.unshift(cur.id);
+      cur = cur.parentId ? byId[cur.parentId] : null;
+    }
+    return path;
+  }
+
+  const targetPath = pathTo(targetId);
+
+  nodes.forEach(n => {
+    const ownPath = pathTo(n.id);
+    const tIdx = ownPath.indexOf(targetId);
+    if (tIdx >= 0 && n.id !== targetId) {
+      n.chain = [...targetPath, ...ownPath.slice(tIdx + 1)];
+    } else {
+      n.chain = ownPath;
+    }
+  });
+}
+
+/* ─── MAIN LOADER ─────────────────────────────────────────────────────── */
+async function loadSearch() {
+  const sid = parseInt(document.getElementById("sid").value);
+  const errEl = document.getElementById("lerr");
+  errEl.textContent = "";
+
+  if (!sid || isNaN(sid)) {
+    errEl.textContent = "Please enter a valid search ID.";
+    return;
+  }
+
+  const btn = document.querySelector("#loader button");
+  btn.textContent = "Loading…";
+  btn.disabled = true;
+
+  try {
+    const raw = await celeste.query(
+      "intapp_compliance__get_conflicts_search",
+      { searchId: sid, propertiesToLoad: ["SearchParties"] }
+    );
+
+    const search = extractObj(raw, "searchParties");
+    if (!search) throw new Error("Could not parse search response. Raw: " + JSON.stringify(raw).slice(0,200));
+
+    const parties = search.searchParties || [];
+    if (!parties.length) throw new Error("Search " + sid + " has no search parties.");
+
+    const targetParty = parties.find(p =>
+      p.affiliationType === "AUDIT-Target" ||
+      p.affiliationType === "Audit Client"
+    );
+    if (!targetParty) throw new Error("No AUDIT-Target party found in search " + sid + ".");
+
+    const tgtNotes = JSON.parse(targetParty.notes || "{}");
+    const targetId   = tgtNotes.x || targetParty.name;
+    const targetFwTok = tgtNotes.l || "IEP";
+    const targetFwFull = FW_FULL[targetFwTok] || "IESBA";
+
+    const treeEntry = (targetParty.corporateTrees || [])[0];
+    if (!treeEntry || !treeEntry.rootCompany) throw new Error("AUDIT-Target party has no corporate tree. Ensure the party was added with a tree attached.");
+
+    const treeRootId = treeEntry.rootCompanyId || treeEntry.rootCompany.externalId;
+    const treeName   = treeEntry.name || treeEntry.rootCompany.name;
+
+    const nodes = [];
+    flattenTree(treeEntry.rootCompany, null, treeRootId, nodes, new Set());
+
+    const screeningMap = {};
+    parties
+      .filter(p => p.affiliationType === "AUDIT-Rule" ||
+                   p.affiliationType === "Audit Rule Affiliate")
+      .forEach(p => {
+        const n = JSON.parse(p.notes || "{}");
+        if (!n.x) return;
+        const rt = (p.relationshipTypes || [])[0] || null;
+        const mapped = rt ? RT_MAP[rt] : null;
+        const localFwFull = FW_FULL[n.l] || "IESBA";
+        screeningMap[n.x] = {
+          appliedFw:        mapped ? mapped.fw : localFwFull,
+          treatment:        mapped ? mapped.t  : null,
+          local:            localFwFull,
+          localStricter:    n.ls || false,
+          localStricterWhy: n.lsw || null,
+          dormant:          n.d  || false,
+          moodys: n.md ? [
+            ["Country",  n.md[0]],
+            ["Listed",   n.md[1]==="U"?"Unlisted":n.md[1]==="L"?"Listed":"Delisted"],
+            ["Industry", n.md[2]]
+          ] : null,
+          moodysNote:
+            n.mn === "N" ? "These values are inputs only — the framework was derived from the firm's own record, not from this data." :
+            n.mn === "D" ? "These values drove the local framework determination." :
+            n.mn === "G" ? "These values disagreed with the firm record; the firm record was used." : null,
+          localWhyList:   (n.lw || []).map(whyText),
+          appliedWhyList: (n.aw || []).map(whyText)
+        };
+      });
+
+    nodes.forEach(n => {
+      const s = screeningMap[n.id];
+
+      n.marks = {};
+      if (n.id === targetId)   n.marks.client  = true;
+      if (n.id === treeRootId) n.marks.ultimate = true;
+
+      if (!s) return;
+
+      n.local            = s.local;
+      n.localStricter    = s.localStricter;
+      n.localStricterWhy = s.localStricterWhy;
+      n.dormant          = s.dormant;
+      n.moodys           = s.moodys;
+      n.moodysNote       = s.moodysNote;
+      n.localWhyList     = s.localWhyList;
+      n.appliedWhyList   = s.appliedWhyList;
+      n.localLabel       = LBL[FWA[s.local]]       || s.local;
+      n.appliedLabel     = LBL[FWA[s.appliedFw]]   || s.appliedFw;
+
+      if (s.treatment) {
+        const originCB = (s.local === s.appliedFw) ? "D" : "I";
+        const fwTokCB  = FWA_REV[s.appliedFw] || "IEP";
+        const code     = fwTokCB + "-" + s.treatment + "GN-" + originCB;
+        const cite     = CITE[s.appliedFw] || "";
+
+        const originA  = (s.local === targetFwFull) ? "D" : "I";
+        const fwTokA   = FWA_REV[targetFwFull] || "IEP";
+        const codeA    = fwTokA + "-" + s.treatment + "GN-" + originA;
+
+        n.code = code;
+        n.cite = cite;
+        n.polCodes = {
+          A: { fw: targetFwFull,  code: codeA, cite: CITE[targetFwFull] || "" },
+          B: { fw: s.appliedFw,   code: code,  cite: cite },
+          C: { fw: s.appliedFw,   code: code,  cite: cite }
+        };
+        n.relationships = [{
+          relationshipType:
+            s.treatment === "R" ? "Restricted" :
+            s.treatment === "M" ? "Materiality" : "Judgment",
+          section: "Tree",
+          restrictionBasis:
+            s.treatment === "R" ? "automatic" :
+            s.treatment === "M" ? "materiality" : "judgment",
+          screeningCode: code,
+          citation: cite
+        }];
+      }
+    });
+
+    buildChains(nodes, targetId);
+
+    const DATA = {
+      target:              targetId,
+      targetName:          targetParty.name,
+      guoId:               treeRootId,
+      guoName:             treeRootId !== targetId ? treeName : null,
+      engagementFramework: targetFwFull,
+      trees:               [{ id: treeRootId, name: treeName }],
+      nodes:               nodes,
+      sections:            { significant: [], board: [] },
+      sectionModes:        { significant: "tree", board: "flat" },
+      sectionCounts:       { significant: 0, board: 0 },
+      legend: {
+        R: { label:"Restricted — by rule",            rule: CITE[targetFwFull]||"", help:"Control-based. No further test." },
+        M: { label:"Materiality — screener runs test", rule: CITE[targetFwFull]||"", help:"Classified from structure; the screening application runs the test." }
+      },
+      marks:      {},
+      markCounts: { client:1, ultimate:1, audit:0, other:0 }
+    };
+
+    initApp(DATA);
+
+  } catch(e) {
+    errEl.textContent = "Error: " + e.message;
+    btn.textContent = "Load";
+    btn.disabled = false;
+  }
+}
+
+/* ─── APP INIT ─────────────────────────────────────────────────────────
+   Called once DATA is ready. Wires up the independence-tree-display
+   renderer (verbatim from the template) against the fetched DATA.       */
+function initApp(DATA) {
+  document.getElementById("loader").style.display = "none";
+  document.getElementById("app").style.display    = "block";
+
+  const byId={},kids={};DATA.nodes.forEach(n=>{byId[n.id]=n;(kids[n.parentId]=kids[n.parentId]||[]).push(n)});
+  [...((DATA.sections&&DATA.sections.significant)||[]),...((DATA.sections&&DATA.sections.board)||[])]
+    .forEach(n=>{byId[n.id]=n});
+  let policy="C", sel=null, F=null, ptab="rule";
+  const TREES=(DATA.trees&&DATA.trees.length)?DATA.trees:[{id:DATA.guoId,name:DATA.guoName||DATA.targetName}];
+  const TABS=TREES.map(x=>({key:"tree:"+x.id,label:"Tree",sub:x.name,mode:"tree",root:x.id}))
+   .concat([{key:"sig",label:"Significant relationships",sub:null,
+             mode:((DATA.sectionModes&&DATA.sectionModes.significant)||"tree"),
+             list:()=>(DATA.sections&&DATA.sections.significant)||[]},
+            {key:"board",label:"Management / board",sub:null,
+             mode:((DATA.sectionModes&&DATA.sectionModes.board)||"flat"),
+             list:()=>(DATA.sections&&DATA.sections.board)||[]}]);
+  let tab=TABS[0].key;
+  const curTab=()=>TABS.find(x=>x.key===tab)||TABS[0];
+  const activeRows=()=>{const T=curTab();
+    return T.root?DATA.nodes.filter(n=>(n.treeId||TREES[0].id)===T.root):T.list()};
+  function kidsOf(rows){const m={};rows.forEach(n=>{(m[n.parentId]=m[n.parentId]||[]).push(n)});return m}
+  const $=i=>document.getElementById(i);
+  POLICY.A[0]+=" — "+DATA.targetName+" ("+DATA.target+")";
+  Object.keys(POLICY).forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=POLICY[k][0];$("policy").appendChild(o)});
+  $("policy").value=policy;
+  function appliedOf(n){const p=n.polCodes&&n.polCodes[policy];
+   return p||{fw:DATA.engagementFramework,code:n.code,cite:n.cite}}
+
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+  function treatOf(code){return code?code.split("-")[1][0]:null}
+
+  $("ttl").textContent="Independence Rule Inheritance";
+  $("tfor").innerHTML='for target entity <span class="tname">'+esc(DATA.targetName)+'</span> <span class="id">('+esc(DATA.target)+')</span>';
+  if(DATA.guoName){$("tguo").innerHTML="a subsidiary of "+esc(DATA.guoName)+' <span class="id">('+esc(DATA.guoId)+')</span>'}
+  else{$("tguo").style.display="none"}
+
+  function describe(){
+   const list=(title,map,cur,keys)=>
+     `<div class="isec"><div class="ih">${title}</div>`+
+     keys.map(k=>{const on=(k===cur);
+       return `<div class="iopt${on?" on":""}">`+
+              `<span class="ick">${on?"&#10003;":""}</span>`+
+              `<span class="itxt"><b>${map[k][0]}</b>${map[k][1]}</span></div>`}).join("")+
+     `</div>`;
+   $("desc").innerHTML = list("Applied rule framework",POLICY,policy,Object.keys(POLICY));}
+
+  function tipFor(n){
+   const a=appliedOf(n), t=treatOf(a.code);
+   return `${a.code}\n\n${a.fw}${a.fw===DATA.engagementFramework?" — the target entity's framework":" — applied instead of "+DATA.engagementFramework+", the target entity's framework"}\n`+
+          `${TREAT[t]?TREAT[t][0]+" — "+TREAT[t][1]:""}\n`+
+          `Rule: ${a.cite}\n`+
+          `${a.code.split("-")[2]==="D"?"This entity's own framework matches the one applied."
+                                       :"This entity's own framework differs from the one applied."}`}
+  function tpillFor(n){
+   const a=appliedOf(n); if(!a.code)return"";
+   const t=treatOf(a.code);
+   if(!t||t==="X")return"";
+   const c=FWC[a.fw]||FWC.UNKNOWN,b=TBAR[t]||TBAR.J,bar=b.c||c[0];
+   return `<span class="badge" style="background:${c[1]};color:${c[0]};border:1px solid ${c[2]};`+
+          `border-left:${b.w} ${b.st} ${bar};border-radius:4px 11px 11px 4px" title="${esc(tipFor(n))}">`+
+          `${esc(FWA[a.fw]||"UNK")} (${esc(t)})</span>`}
+  function lpill(fw,strict,swhy){
+   const c=FWC[fw]||FWC.UNKNOWN;
+   return `<span class="badge" style="background:${c[1]};color:${c[0]};`+
+          `border:1px solid ${c[2]};border-radius:11px" `+
+          `title="${esc(fw+"\n\nThis entity's own framework, judged in isolation.\n"+
+            "No treatment — a framework alone does not put an entity in scope."+(swhy?"\n\n"+swhy:""))}">`+
+          `${esc(FWA[fw]||"UNK")}${strict?" !":""}</span>`}
+  function pill(fw,txt){const c=FWC[fw]||FWC.UNKNOWN;
+   return `<span class="badge" style="background:${c[1]};color:${c[0]};border:1px solid ${c[2]}">${esc(txt)}</span>`}
+
+  function match(n){
+   if(!F)return true;
+   if(F.kind==="local")return n.local===F.key;
+   const a=appliedOf(n);
+   return !!a.code&&(a.fw+"|"+treatOf(a.code))===F.key}
+  function anyMatch(n){return match(n)||(kids[n.id]||[]).some(anyMatch)}
+
+  function tabstrip(){
+   $("tabs").innerHTML=TABS.map(x=>{
+    const on=x.key===tab;
+    const n=(x.root?DATA.nodes.filter(y=>(y.treeId||TREES[0].id)===x.root).length:x.list().length);
+    return `<button class="tb${on?" on":""}" data-k="${esc(x.key)}" aria-selected="${on}">`+
+     `<span class="tbl">${esc(x.label)}</span>`+
+     (x.sub?`<span class="tbs">${esc(x.sub)}</span>`:"")+
+     `<span class="tbn">${n}</span></button>`}).join("");
+   [...document.querySelectorAll(".tb")].forEach(e=>e.onclick=()=>{
+     if(e.dataset.k===tab)return; tab=e.dataset.k; sel=null; render(); panel()})}
+
+  function rowMarkup(n,d,flat){
+   const cls="n"+(n.id===DATA.target?" tgt":"")+(sel===n.id?" sel":"");
+   const applied = appliedOf(n).code?tpillFor(n):"";
+   const m=n.marks||{};
+   const ics=[];
+   if(m.client) ics.push(["&#9670;","Target entity — the company this report is about."]);
+   if(m.ultimate) ics.push(["&#128081;","Ultimate owner of this corporate tree."]);
+   if(m.audit) ics.push(["&#128211;", m.audit.flaggedOnly
+     ? "Existing audit client — flagged as an audit client on the party record, but NO audit matter is on file. "+
+       "The framework shown for it is an inference, not a recorded determination."
+     : "Existing audit client\n"+(m.audit.matters||[]).join("\n")+
+       (m.audit.clientId?"\nClient: "+m.audit.clientId:"")]);
+   if(m.other) ics.push(["&#128188;","Existing non-audit client\n"+(m.other.matters||[]).join("\n")+
+     (m.other.clientId?"\nClient: "+m.other.clientId:"")+
+     "\n\nNon-audit services to a restricted entity are what the independence rules actually bite on."]);
+   const ac=ics.map(([g,tp])=>`<span class="ico" title="${esc(tp)}">${g}</span>`).join("");
+   const local = n.local ? lpill(n.local,n.localStricter,n.localStricterWhy) : "";
+   return `<div class="${cls}" data-id="${esc(n.id)}">`+
+      `<span class="c-app">${applied}</span>`+
+      `<span class="c-ac">${ac}</span>`+
+      `<span class="c-name" style="padding-left:${flat?0:d*17}px">`+
+        `<span class="nm">${esc(n.name)}</span> `+
+        `<span class="id">(${esc(n.id.length>15?n.id.slice(0,12)+"…":n.id)})</span>`+
+        (n.dormant?'<span class="dot">&#9679; dormant</span>':"")+
+      `</span>`+
+      `<span class="c-loc">${local}</span>`+
+      `</div>`}
+
+  function render(){
+   tabstrip();
+   const T=curTab();
+   let h=`<div class="thead"><span>Applied</span><span></span><span></span><span>Local</span></div>`;
+   const rows=activeRows();
+   if(T.mode==="tree"){
+     const ids=new Set(rows.map(n=>n.id));
+     const K=T.root?kids:kidsOf(rows);
+     const roots=rows.filter(n=>n.parentId===null||!ids.has(n.parentId));
+     const anyM=n=>match(n)||(K[n.id]||[]).filter(c=>ids.has(c.id)).some(anyM);
+     let seen=new Set();
+     (function walk(list,d){list.forEach(n=>{
+       if(seen.has(n.id))return;seen.add(n.id);
+       if(!anyM(n))return;
+       h+=rowMarkup(n,d,false);
+       walk((K[n.id]||[]).filter(c=>ids.has(c.id)),d+1)})})(roots,0);
+     if(!rows.length) h+='<div class="empty">No entities in this section.</div>';
+   } else {
+     const r=rows.filter(match);
+     h+=r.length?r.map(n=>rowMarkup(n,0,true)).join("")
+                :'<div class="empty">No entities in this section.</div>';
+   }
+   $("tree").innerHTML=h;
+   describe();
+   [...document.querySelectorAll(".n")].forEach(e=>e.onclick=()=>{
+     sel=(sel===e.dataset.id)?null:e.dataset.id; render(); panel()});
+   legend()}
+
+  function legend(){
+   const cnt={},sample={};
+   const rows=activeRows();
+   rows.forEach(n=>{
+     const a=appliedOf(n); if(!a.code)return;
+     const k=a.fw+"|"+treatOf(a.code);
+     cnt[k]=(cnt[k]||0)+1; if(!sample[k])sample[k]=n});
+   const L=DATA.legend||{};
+   const seenFw={};
+   rows.forEach(n=>{if(n.local)seenFw[n.local]=(seenFw[n.local]||0)+1});
+   const ORDFW={"SEC/PCAOB":0,"EU-537":1,"UK-FRC":2,"IESBA-PIE":3,"IESBA":4,"AICPA":5,"UNKNOWN":6};
+   const lc=Object.entries(seenFw).map(([fw,n])=>({fw,n}))
+     .sort((a,b)=>(ORDFW[a.fw]??9)-(ORDFW[b.fw]??9)||b.n-a.n);
+   const cols=[...lc].sort((a,b)=>(a.fw===DATA.engagementFramework?-1:0)-(b.fw===DATA.engagementFramework?-1:0));
+   if(lc.length&&!cols.some(e=>e.fw===DATA.engagementFramework))
+     cols.unshift({fw:DATA.engagementFramework,n:0});
+   [...new Set(Object.keys(cnt).map(k=>k.split("|")[0]))].forEach(fw=>{
+     if(!cols.some(e=>e.fw===fw))cols.push({fw,n:0})});
+
+   const appliedOrphan=()=>[...new Set(Object.keys(cnt).map(k=>k.split("|")[0]))].map(acell).join("");
+   const jcell=e=>{
+    const c=FWC[e.fw]||FWC.UNKNOWN,on=!!F&&F.kind==="local"&&F.key===e.fw,dim=!!F&&!on;
+    const tip=`${e.fw}\n\n${e.n} ${e.n===1?"entity":"entities"} in this tree carry this as their own framework, `+
+     `judged in isolation.\nA framework alone does not put an entity in scope.`+
+     (e.fw===DATA.engagementFramework?`\n\nThis is also the target entity's own framework.`:"")+
+     `\n\nPress to show only these entities, with the chain above them kept for context. Press again to clear.`;
+    return `<span class="lg fj${on?" on":""}${dim?" dim":""}" data-l="${esc(e.fw)}" data-n="${e.n}" `+
+     `style="background:${c[1]};color:${c[0]};border:1px solid ${c[2]}" title="${esc(tip)}">`+
+     `${esc(FWA[e.fw]||"UNK")}</span>`};
+
+   const acell=fw=>{
+    const ORD={R:0,M:1,J:2,X:3};
+    return Object.entries(cnt).filter(([k])=>k.split("|")[0]===fw)
+     .sort((a,b)=>(ORD[a[0].split("|")[1]]??9)-(ORD[b[0].split("|")[1]]??9)||b[1]-a[1])
+     .map(([k,v])=>{ const t=k.split("|")[1];
+      const m={label:(L[t]&&L[t].label)||TLABEL[t]||"",
+               rule:(L[t]&&L[t].rule)||(sample[t]&&sample[t].cite)||"",
+               help:(L[t]&&L[t].help)||(TREAT[t]?TREAT[t][1]:"")};
+      const on=!!F&&F.kind==="applied"&&F.key===k,dim=!!F&&!on;
+      const tip=`${FWA[fw]||"UNK"} (${t}) — ${m.label}\n\n${v} ${v===1?"entity":"entities"}\n`+
+       `${fw===DATA.engagementFramework?"":"Applied instead of "+DATA.engagementFramework+", the target entity's framework.\n"}`+
+       `${m.rule}\n\n${m.help}\n\nPress to show only these entities, with the chain above them kept for context. Press again to clear.`;
+      const c=FWC[fw]||FWC.UNKNOWN,b=TBAR[t]||TBAR.J,bar=b.c||c[0];
+      const style = t==="X"
+       ? `background:transparent;color:#888888;border:1px dashed #CAD2DB;border-radius:11px;`+
+         `text-decoration:line-through`
+       : `background:${c[1]};color:${c[0]};border:1px solid ${c[2]};`+
+         `border-left:${b.w} ${b.st} ${bar};border-radius:4px 11px 11px 4px`;
+      return `<span class="lg fa${on?" on":""}${dim?" dim":""}" data-k="${esc(k)}" data-t="${esc(t)}" `+
+       `data-fw="${esc(fw)}" data-n="${v}" style="${style}" title="${esc(tip)}">`+
+       `${esc(FWA[fw]||"UNK")} (${esc(t)})</span>`}).join("")};
+
+   $("lgd").innerHTML=
+    `<div class="fgrid" style="grid-template-columns:max-content repeat(${Math.max(cols.length,1)},minmax(0,max-content))">`+
+     `<span class="flabel">Local jurisdiction</span>`+
+     (cols.length?cols.map(e=>`<span class="fcell">${jcell(e)}</span>`).join("")
+                :`<span class="fcell"><span class="fnone">None in this table</span></span>`)+
+     `<span class="flabel">Applied rule</span>`+
+     (cols.length?cols.map(e=>`<span class="fcell fstack">${acell(e.fw)}</span>`).join("")
+                :`<span class="fcell fstack">${appliedOrphan()}</span>`)+
+    `</div>`;
+   const press=(kind,key)=>{F=(F&&F.kind===kind&&F.key===key)?null:{kind,key}; render()};
+   [...document.querySelectorAll(".fj")].forEach(e=>e.onclick=()=>press("local",e.dataset.l));
+   [...document.querySelectorAll(".fa")].forEach(e=>e.onclick=()=>press("applied",e.dataset.k));}
+
+  function chainUp(id,rows,useChain){
+   const by={}; rows.forEach(r=>by[r.id]=r);
+   if(useChain){const c=(by[id]||{}).chain;
+     if(c&&c.length){const m=c.map(x=>by[x]).filter(Boolean); if(m.length)return m}}
+   const out=[]; let cur=by[id];
+   while(cur){ out.unshift(cur); cur=cur.parentId?by[cur.parentId]:null }
+   return out}
+
+  function hierBlock(rows,entityId,useChain){
+   const mine=chainUp(entityId,rows,useChain), client=chainUp(DATA.target,rows,useChain);
+   const depth={}; const seen=[];
+   [mine,client].forEach(ch=>ch.forEach((r,i)=>{ if(!(r.id in depth)){depth[r.id]=i; seen.push(r)} }));
+   seen.sort((x,y)=>depth[x.id]-depth[y.id]);
+   return seen.map(r=>{
+    const me=r.id===entityId, guo=r.id===DATA.guoId, cl=r.id===DATA.target;
+    return `<div class="hr${me?" me":""}">`+
+     `<span class="hi">${guo?"&#128081;":""}</span>`+
+     `<span class="hi">${cl?"&#9670;":""}</span>`+
+     `<span class="hn" style="padding-left:${depth[r.id]*16}px">${esc(r.name)}</span></div>`}).join("")}
+
+  function panel(){
+   const n=byId[sel];
+   if(!n){$("ovl").classList.remove("open");$("panel").innerHTML="";return}
+   $("ovl").classList.add("open");
+   const TB=[["rule","Local jurisdiction and applied rule"],["rel","Relationship"]];
+   if(n.moodys) TB.push(["moodys","Moody's data"]);
+   if(!TB.some(x=>x[0]===ptab)) ptab="rule";
+   const why=l=>`<div class="pw"><div class="pwh">Why</div><ul>`+
+     (l||[]).map(x=>`<li>${esc(x)}</li>`).join("")+`</ul></div>`;
+   let body="";
+   if(ptab==="rule"){
+     body=(n.local?`<p class="psh">Local jurisdiction</p>
+       <div class="prow">${lpill(n.local,n.localStricter,n.localStricterWhy)}<span>${esc(n.localLabel||n.local)}</span></div>
+       ${why(n.localWhyList)}`:"")+
+      `<p class="psh" style="margin-top:18px">Applied rule</p>
+       <div class="prow">${appliedOf(n).code?tpillFor(n):'<span class="fnone">None applied</span>'}`+
+       `<span>${esc(LBL[FWA[appliedOf(n).fw]]||n.appliedLabel||DATA.engagementFramework)}</span></div>
+       ${why(n.appliedWhyList)}`;
+   } else if(ptab==="rel"){
+     const secs=[["Tree",DATA.nodes],
+                 ["Significant relationships",(DATA.sections&&DATA.sections.significant)||[]],
+                 ["Management / board",(DATA.sections&&DATA.sections.board)||[]]];
+     body=secs.filter(([,rows])=>rows.some(r=>r.id===n.id))
+       .map(([label,rows])=>`<p class="psh">${label}</p>${hierBlock(rows,n.id,label==="Tree")}`).join("")+
+      `<p class="psh" style="margin-top:18px">Relationships to <span class="tname">${esc(DATA.targetName)}</span></p><ul class="prl">`+
+       (n.relationships||[]).map((r,i)=>{
+         const strongest=(i===0&&!r.blocked);
+         return `<li>${esc(r.relationshipType.replace(/([a-z])([A-Z])/g,"$1 $2"))}`+
+           (strongest?`<span class="pstr">strongest</span>`:"")+
+           (r.blocked?`<span class="pblk">not applied</span>`:"")+`</li>`}).join("")+
+      `</ul>`;
+   } else {
+     body=`<p class="psh">What Moody's returned</p><dl class="kv">`+
+       n.moodys.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")+`</dl>`+
+       (n.moodysNote?`<div class="pnote">${esc(n.moodysNote)}</div>`:"");
+   }
+   $("panel").innerHTML=`
+   <div class="ph">
+     <button class="cls" id="pclose" title="Close">&times;</button>
+     <h2${n.id===DATA.target?' class="tname"':''}>${esc(n.name)}</h2>
+   </div>
+   <div class="ptabs">`+TB.map(([k,l])=>
+     `<button class="ptb${k===ptab?" on":""}" data-p="${k}">${esc(l)}</button>`).join("")+`</div>
+   <div class="pc">${body}</div>`;
+   $("pclose").onclick=()=>{sel=null;render();panel()};
+   [...document.querySelectorAll(".ptb")].forEach(e=>e.onclick=()=>{ptab=e.dataset.p;panel()})}
+
+  let infoOpen=false;
+  $("infobtn").onclick=()=>{infoOpen=!infoOpen;
+    $("desc").classList[infoOpen?"add":"remove"]("open");
+    $("infobtn").setAttribute("aria-expanded",infoOpen?"true":"false");
+    $("infobtn").textContent=infoOpen?"▴":"▾"};
+  $("policy").onchange=e=>{policy=e.target.value;F=null;render();if(sel)panel()};
+  $("ovl").onclick=e=>{if(e&&e.target&&e.target.id==="ovl"){sel=null;render();panel()}};
+  document.addEventListener&&document.addEventListener("keydown",e=>{
+    if(e&&e.key==="Escape"&&sel){sel=null;render();panel()}});
+
+  render();
+}
+</script>
+</body>
+</html>
