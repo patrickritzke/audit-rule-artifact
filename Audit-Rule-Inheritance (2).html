@@ -235,10 +235,27 @@ select:focus{outline:1px solid var(--color-primary-light);outline-offset:1px}
 </div>
 <script>
 /* ─── RUNTIME BRIDGE ──────────────────────────────────────────────────
-   The editor renders this page inside an iframe; the celeste bridge only
-   exists on the parent frame. Safe when unframed too, since window.parent
-   === window in that case. */
-const celeste = window.parent.celeste;
+   The host injects `celeste` into this frame itself (relayed down through
+   the sandboxed shell via postMessage) rather than us reading it off
+   window.parent — that read never worked reliably since the srcdoc frame
+   sandbox has no allow-same-origin. The injection is async, so don't
+   capture `celeste` at parse time; wait for it lazily at call time,
+   right before the first query, well after page load. */
+function waitForCeleste(timeoutMs) {
+  return new Promise((resolve, reject) => {
+    if (typeof celeste !== "undefined" && celeste && celeste.query) return resolve(celeste);
+    const start = Date.now();
+    const iv = setInterval(() => {
+      if (typeof celeste !== "undefined" && celeste && celeste.query) {
+        clearInterval(iv);
+        resolve(celeste);
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(iv);
+        reject(new Error("celeste bridge did not become available within " + timeoutMs + "ms. The host may not have injected it into this frame."));
+      }
+    }, 50);
+  });
+}
 
 /* ─── DICTIONARIES (verbatim from independence-tree-display template) ──── */
 const FWC={"SEC/PCAOB":["#8C1D1D","#FBEAEA","#F0CCCC"],"EU-537":["#0E54A9","#E4EDFA","#C2D6EF"],
@@ -496,8 +513,10 @@ async function loadSearch() {
   btn.disabled = true;
 
   try {
+    const celesteApi = await waitForCeleste(8000);
+
     // Step 1 — the search and its search parties.
-    const raw = await celeste.query(
+    const raw = await celesteApi.query(
       "intapp_compliance__get_conflicts_search",
       { searchId: sid, propertiesToLoad: ["SearchParties"] }
     );
@@ -528,7 +547,7 @@ async function loadSearch() {
     // the party record itself (no corporateFamily wrapper) carrying
     // corporateTrees / shareholders / closeAffiliates / boardMembers as
     // sibling fields — confirmed against a live sample.
-    const familyRaw = await celeste.query(
+    const familyRaw = await celesteApi.query(
       "intapp_compliance__get_party",
       { partyId: targetPartyId, propertiesToLoad: ["CorporateFamily"] }
     );
