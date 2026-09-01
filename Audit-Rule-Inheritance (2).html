@@ -344,6 +344,18 @@ function parseNotes(raw) {
   try { return JSON.parse(raw); } catch (e) { return {}; }
 }
 
+/* The party-mutation tools (add/update_conflicts_search_party) have no
+   `notes` parameter at all — only `terms`/`searchTerms` is writable as an
+   array field. So the skill packs the same JSON payload into one term,
+   prefixed "AUDIT:", instead. Read that first; fall back to `notes` in
+   case it's ever populated some other way. */
+function extractAuditNotes(party) {
+  const terms = party.terms || party.searchTerms || [];
+  const tagged = terms.find(t => typeof t === "string" && t.startsWith("AUDIT:"));
+  if (tagged) return parseNotes(tagged.slice("AUDIT:".length));
+  return parseNotes(party.notes);
+}
+
 /* ─── TREE FLATTEN ────────────────────────────────────────────────────── */
 function flattenTree(node, parentId, treeId, out, seen) {
   if (!node || !node.externalId) return;
@@ -521,7 +533,7 @@ async function loadSearch() {
     const targetPartyId = targetParty.partyId || targetParty.id;
     if (!targetPartyId) throw new Error("AUDIT-Target party record has no partyId — cannot fetch its corporate family.");
 
-    const tgtNotes = parseNotes(targetParty.notes);
+    const tgtNotes = extractAuditNotes(targetParty);
     const targetId   = tgtNotes.x || targetParty.name;
     const targetFwTok = tgtNotes.l || "IEP";
     const targetFwFull = FW_FULL[targetFwTok] || "IESBA";
@@ -564,7 +576,7 @@ async function loadSearch() {
                    p.affiliationType === "AUDIT-Rule" ||
                    p.affiliationType === "Audit Rule Affiliate")
       .forEach(p => {
-        const n = parseNotes(p.notes);
+        const n = extractAuditNotes(p);
         if (!n.x) return;
         const rt = (p.relationshipTypes || [])[0] || null;
         const mapped = rt ? RT_MAP[rt] : null;
