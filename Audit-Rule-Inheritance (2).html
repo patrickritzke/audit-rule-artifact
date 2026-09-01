@@ -275,7 +275,7 @@ const CITE={
   "AICPA":     "AICPA Code of Professional Conduct, 1.224"
 };
 /* Keys match the Intapp affiliationType picklist "name" values with the
-   "Audit Affiliate Rule: " prefix already stripped (see the strip in the
+   "Audit Aff Rule - " prefix already stripped (see the strip in the
    AUDIT-Affiliate parsing below) — trimmed framework labels: FRC (not
    "FRC Ethical Standard"), EU (not "EU Audit Regulation"), AICPA (not
    "AICPA Independence"), IESBA (not "IESBA (non-PIE)"). fw values below
@@ -584,17 +584,18 @@ async function loadSearch() {
     // Step 3 — AUDIT-Affiliate parties: notes parsed into the screening
     // map keyed by each entity's external id. relationshipType is ignored
     // entirely — affiliationType alone now carries the framework and
-    // treatment, via the 18 "Audit Affiliate Rule: <framework> —
-    // <treatment>" values (plus "...: Undetermined") set up in Intapp.
+    // treatment, via the 18 "Audit Aff Rule - <framework> — <treatment>"
+    // values (plus "...- Undetermined") set up in Intapp.
     const screeningMap = {};
-    const AFF_PREFIX = "Audit Affiliate Rule: ";
+    const AFF_PREFIX = "Audit Aff Rule - ";
     parties
       .filter(p => {
         const at = p.affiliationType || "";
-        return at.startsWith("Audit Affiliate Rule") ||
+        return at.startsWith("Audit Aff Rule") ||
                at === "AUDIT-Affiliate" ||
                at === "Audit Affiliate" ||
                at === "Audit Affiliate - Rule" ||
+               at === "Audit Affiliate Rule" ||
                at === "AUDIT-Rule" ||
                at === "Audit Rule Affiliate";
       })
@@ -602,11 +603,11 @@ async function loadSearch() {
         const n = extractAuditNotes(p);
         if (!n.x) return;
         const at = p.affiliationType || "";
-        // Only the full "Audit Affiliate Rule: <...>" values carry a
-        // lookup key — "Undetermined" naturally misses RT_MAP (no entry
-        // for it), same as an unmapped/legacy affiliationType: mapped
-        // stays null either way, which is exactly undetermined's "no
-        // code" behavior.
+        // Only the full "Audit Aff Rule - <...>" values carry a lookup
+        // key — "Undetermined" naturally misses RT_MAP (no entry for
+        // it), same as an unmapped/legacy affiliationType: mapped stays
+        // null either way, which is exactly undetermined's "no code"
+        // behavior.
         const rt = at.startsWith(AFF_PREFIX) ? at.slice(AFF_PREFIX.length) : null;
         const mapped = rt ? RT_MAP[rt] : null;
         const localFwFull = FW_FULL[n.l] || "IESBA";
