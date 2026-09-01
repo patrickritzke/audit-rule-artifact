@@ -348,11 +348,16 @@ function parseNotes(raw) {
    `notes` parameter at all — only `terms`/`searchTerms` is writable as an
    array field. So the skill packs the same JSON payload into one term,
    prefixed "AUDIT:", instead. Read that first; fall back to `notes` in
-   case it's ever populated some other way. */
+   case it's ever populated some other way.
+   terms can hold any number of other entries (name variants, aliases the
+   system generates, etc.) in any order, so this scans the whole array
+   rather than assuming a fixed position. If more than one AUDIT: entry
+   ever exists (e.g. a stale one left over from an earlier partial
+   update), take the last — the most recently written one wins. */
 function extractAuditNotes(party) {
   const terms = party.terms || party.searchTerms || [];
-  const tagged = terms.find(t => typeof t === "string" && t.startsWith("AUDIT:"));
-  if (tagged) return parseNotes(tagged.slice("AUDIT:".length));
+  const auditTerms = terms.filter(t => typeof t === "string" && t.startsWith("AUDIT:"));
+  if (auditTerms.length) return parseNotes(auditTerms[auditTerms.length - 1].slice("AUDIT:".length));
   return parseNotes(party.notes);
 }
 
