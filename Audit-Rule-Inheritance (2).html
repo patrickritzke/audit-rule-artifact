@@ -358,6 +358,15 @@ function extractObj(raw, key) {
   return null;
 }
 
+/* `notes` is documented/observed as a JSON string, but some responses
+   come back with it already deserialized into an object — handle both
+   rather than crashing JSON.parse on a non-string. */
+function parseNotes(raw) {
+  if (raw == null) return {};
+  if (typeof raw === "object") return raw;
+  try { return JSON.parse(raw); } catch (e) { return {}; }
+}
+
 /* ─── TREE FLATTEN ────────────────────────────────────────────────────── */
 function flattenTree(node, parentId, treeId, out, seen) {
   if (!node || !node.externalId) return;
@@ -537,7 +546,7 @@ async function loadSearch() {
     const targetPartyId = targetParty.partyId || targetParty.id;
     if (!targetPartyId) throw new Error("AUDIT-Target party record has no partyId — cannot fetch its corporate family.");
 
-    const tgtNotes = JSON.parse(targetParty.notes || "{}");
+    const tgtNotes = parseNotes(targetParty.notes);
     const targetId   = tgtNotes.x || targetParty.name;
     const targetFwTok = tgtNotes.l || "IEP";
     const targetFwFull = FW_FULL[targetFwTok] || "IESBA";
@@ -580,7 +589,7 @@ async function loadSearch() {
                    p.affiliationType === "AUDIT-Rule" ||
                    p.affiliationType === "Audit Rule Affiliate")
       .forEach(p => {
-        const n = JSON.parse(p.notes || "{}");
+        const n = parseNotes(p.notes);
         if (!n.x) return;
         const rt = (p.relationshipTypes || [])[0] || null;
         const mapped = rt ? RT_MAP[rt] : null;
