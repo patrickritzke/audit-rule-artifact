@@ -274,13 +274,15 @@ const CITE={
   "IESBA":     "IESBA Code of Ethics, Section 400",
   "AICPA":     "AICPA Code of Professional Conduct, 1.224"
 };
-/* Keys match the Intapp relationshipType picklist "name" values with the
+/* Keys match the Intapp affiliationType picklist "name" values with the
    "Audit Affiliate Rule: " prefix already stripped (see the strip in the
    AUDIT-Affiliate parsing below) — trimmed framework labels: FRC (not
    "FRC Ethical Standard"), EU (not "EU Audit Regulation"), AICPA (not
    "AICPA Independence"), IESBA (not "IESBA (non-PIE)"). fw values below
    are this file's own internal framework tokens (FWC/CITE/FWA keys) —
-   unrelated to the picklist and must not change with it. */
+   unrelated to the picklist and must not change with it.
+   relationshipType is ignored entirely: affiliationType is the only
+   source for this lookup now — see loadSearch(). */
 const RT_MAP={
   "SEC/PCAOB — Restricted":  { fw:"SEC/PCAOB",  t:"R" },
   "SEC/PCAOB — Materiality": { fw:"SEC/PCAOB",  t:"M" },
@@ -579,27 +581,33 @@ async function loadSearch() {
     const board = [];
     flattenSection(boardRaw, "managementBoard", board, new Set());
 
-    // Step 3 — AUDIT-Affiliate parties: relationship + notes, parsed into
-    // the screening map keyed by each entity's external id.
+    // Step 3 — AUDIT-Affiliate parties: notes parsed into the screening
+    // map keyed by each entity's external id. relationshipType is ignored
+    // entirely — affiliationType alone now carries the framework and
+    // treatment, via the 18 "Audit Affiliate Rule: <framework> —
+    // <treatment>" values (plus "...: Undetermined") set up in Intapp.
     const screeningMap = {};
+    const AFF_PREFIX = "Audit Affiliate Rule: ";
     parties
-      .filter(p => p.affiliationType === "AUDIT-Affiliate" ||
-                   p.affiliationType === "Audit Affiliate" ||
-                   p.affiliationType === "Audit Affiliate - Rule" ||
-                   p.affiliationType === "Audit Affiliate Rule" ||
-                   p.affiliationType === "AUDIT-Rule" ||
-                   p.affiliationType === "Audit Rule Affiliate")
+      .filter(p => {
+        const at = p.affiliationType || "";
+        return at.startsWith("Audit Affiliate Rule") ||
+               at === "AUDIT-Affiliate" ||
+               at === "Audit Affiliate" ||
+               at === "Audit Affiliate - Rule" ||
+               at === "AUDIT-Rule" ||
+               at === "Audit Rule Affiliate";
+      })
       .forEach(p => {
         const n = extractAuditNotes(p);
         if (!n.x) return;
-        const rtRaw = (p.relationshipTypes || [])[0] || null;
-        // relationshipType picklist entries are prefixed "Audit Affiliate
-        // Rule: " in Intapp; RT_MAP itself stays unprefixed so it also
-        // still matches any older unprefixed test data.
-        const RT_PREFIX = "Audit Affiliate Rule: ";
-        const rt = rtRaw && rtRaw.startsWith(RT_PREFIX)
-          ? rtRaw.slice(RT_PREFIX.length)
-          : rtRaw;
+        const at = p.affiliationType || "";
+        // Only the full "Audit Affiliate Rule: <...>" values carry a
+        // lookup key — "Undetermined" naturally misses RT_MAP (no entry
+        // for it), same as an unmapped/legacy affiliationType: mapped
+        // stays null either way, which is exactly undetermined's "no
+        // code" behavior.
+        const rt = at.startsWith(AFF_PREFIX) ? at.slice(AFF_PREFIX.length) : null;
         const mapped = rt ? RT_MAP[rt] : null;
         const localFwFull = FW_FULL[n.l] || "IESBA";
         screeningMap[n.x] = {
