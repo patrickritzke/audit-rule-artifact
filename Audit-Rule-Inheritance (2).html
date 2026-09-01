@@ -274,25 +274,32 @@ const CITE={
   "IESBA":     "IESBA Code of Ethics, Section 400",
   "AICPA":     "AICPA Code of Professional Conduct, 1.224"
 };
+/* Keys match the Intapp relationshipType picklist "name" values with the
+   "Audit Affiliate Rule: " prefix already stripped (see the strip in the
+   AUDIT-Affiliate parsing below) — trimmed framework labels: FRC (not
+   "FRC Ethical Standard"), EU (not "EU Audit Regulation"), AICPA (not
+   "AICPA Independence"), IESBA (not "IESBA (non-PIE)"). fw values below
+   are this file's own internal framework tokens (FWC/CITE/FWA keys) —
+   unrelated to the picklist and must not change with it. */
 const RT_MAP={
-  "SEC/PCAOB — Restricted":        { fw:"SEC/PCAOB",  t:"R" },
-  "SEC/PCAOB — Materiality":       { fw:"SEC/PCAOB",  t:"M" },
-  "SEC/PCAOB — Judgment":          { fw:"SEC/PCAOB",  t:"J" },
-  "FRC Ethical Standard — Restricted":  { fw:"UK-FRC", t:"R" },
-  "FRC Ethical Standard — Materiality": { fw:"UK-FRC", t:"M" },
-  "FRC Ethical Standard — Judgment":    { fw:"UK-FRC", t:"J" },
-  "EU Audit Regulation — Restricted":   { fw:"EU-537", t:"R" },
-  "EU Audit Regulation — Materiality":  { fw:"EU-537", t:"M" },
-  "EU Audit Regulation — Judgment":     { fw:"EU-537", t:"J" },
-  "IESBA PIE — Restricted":        { fw:"IESBA-PIE", t:"R" },
-  "IESBA PIE — Materiality":       { fw:"IESBA-PIE", t:"M" },
-  "IESBA PIE — Judgment":          { fw:"IESBA-PIE", t:"J" },
-  "IESBA (non-PIE) — Restricted":  { fw:"IESBA",     t:"R" },
-  "IESBA (non-PIE) — Materiality": { fw:"IESBA",     t:"M" },
-  "IESBA (non-PIE) — Judgment":    { fw:"IESBA",     t:"J" },
-  "AICPA Independence — Restricted":  { fw:"AICPA",  t:"R" },
-  "AICPA Independence — Materiality": { fw:"AICPA",  t:"M" },
-  "AICPA Independence — Judgment":    { fw:"AICPA",  t:"J" }
+  "SEC/PCAOB — Restricted":  { fw:"SEC/PCAOB",  t:"R" },
+  "SEC/PCAOB — Materiality": { fw:"SEC/PCAOB",  t:"M" },
+  "SEC/PCAOB — Judgment":    { fw:"SEC/PCAOB",  t:"J" },
+  "FRC — Restricted":        { fw:"UK-FRC", t:"R" },
+  "FRC — Materiality":       { fw:"UK-FRC", t:"M" },
+  "FRC — Judgment":          { fw:"UK-FRC", t:"J" },
+  "EU — Restricted":         { fw:"EU-537", t:"R" },
+  "EU — Materiality":        { fw:"EU-537", t:"M" },
+  "EU — Judgment":           { fw:"EU-537", t:"J" },
+  "IESBA PIE — Restricted":  { fw:"IESBA-PIE", t:"R" },
+  "IESBA PIE — Materiality": { fw:"IESBA-PIE", t:"M" },
+  "IESBA PIE — Judgment":    { fw:"IESBA-PIE", t:"J" },
+  "IESBA — Restricted":      { fw:"IESBA",     t:"R" },
+  "IESBA — Materiality":     { fw:"IESBA",     t:"M" },
+  "IESBA — Judgment":        { fw:"IESBA",     t:"J" },
+  "AICPA — Restricted":      { fw:"AICPA",  t:"R" },
+  "AICPA — Materiality":     { fw:"AICPA",  t:"M" },
+  "AICPA — Judgment":        { fw:"AICPA",  t:"J" }
 };
 const WHY={
   AUD: "This entity is the target entity under audit.",
@@ -578,12 +585,21 @@ async function loadSearch() {
     parties
       .filter(p => p.affiliationType === "AUDIT-Affiliate" ||
                    p.affiliationType === "Audit Affiliate" ||
+                   p.affiliationType === "Audit Affiliate - Rule" ||
+                   p.affiliationType === "Audit Affiliate Rule" ||
                    p.affiliationType === "AUDIT-Rule" ||
                    p.affiliationType === "Audit Rule Affiliate")
       .forEach(p => {
         const n = extractAuditNotes(p);
         if (!n.x) return;
-        const rt = (p.relationshipTypes || [])[0] || null;
+        const rtRaw = (p.relationshipTypes || [])[0] || null;
+        // relationshipType picklist entries are prefixed "Audit Affiliate
+        // Rule: " in Intapp; RT_MAP itself stays unprefixed so it also
+        // still matches any older unprefixed test data.
+        const RT_PREFIX = "Audit Affiliate Rule: ";
+        const rt = rtRaw && rtRaw.startsWith(RT_PREFIX)
+          ? rtRaw.slice(RT_PREFIX.length)
+          : rtRaw;
         const mapped = rt ? RT_MAP[rt] : null;
         const localFwFull = FW_FULL[n.l] || "IESBA";
         screeningMap[n.x] = {
