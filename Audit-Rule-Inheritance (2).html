@@ -476,6 +476,7 @@ function applyScreeningMap(rows, screeningMap, targetId, treeRootId, targetFwFul
     n.appliedWhyList   = s.appliedWhyList;
     n.localLabel       = LBL[FWA[s.local]]       || s.local;
     n.appliedLabel     = LBL[FWA[s.appliedFw]]   || s.appliedFw;
+    n.otherEngagementId = s.otherEngagementId;
 
     if (s.treatment) {
       const originCB = (s.local === s.appliedFw) ? "D" : "I";
@@ -628,13 +629,30 @@ async function loadSearch() {
             n.mn === "D" ? "These values drove the local framework determination." :
             n.mn === "G" ? "These values disagreed with the firm record; the firm record was used." : null,
           localWhyList:   (n.lw || []).map(whyText),
-          appliedWhyList: (n.aw || []).map(whyText)
+          appliedWhyList: (n.aw || []).map(whyText),
+          otherEngagementId: n.oe || null
         };
       });
 
     applyScreeningMap(nodes,       screeningMap, targetId, treeRootId, targetFwFull);
     applyScreeningMap(significant, screeningMap, targetId, treeRootId, targetFwFull);
     applyScreeningMap(board,       screeningMap, targetId, treeRootId, targetFwFull);
+
+    // Mark every node named as an otherEngagementId (a different audit
+    // client whose framework affects some other node's applied rule) with
+    // the same marks.audit flag rowMarkup() already knows how to render —
+    // matches whatever the main table shows, since we don't have that
+    // client's matters/clientId, only that it is one.
+    const allRows = [...nodes, ...significant, ...board];
+    const byExternalId = {};
+    allRows.forEach(r => { byExternalId[r.id] = r; });
+    allRows.forEach(r => {
+      if (!r.otherEngagementId) return;
+      const oeRow = byExternalId[r.otherEngagementId];
+      if (!oeRow) return;
+      oeRow.marks = oeRow.marks || {};
+      oeRow.marks.audit = oeRow.marks.audit || { flaggedOnly: true };
+    });
 
     buildChains(nodes, targetId);
 
@@ -887,17 +905,18 @@ function initApp(DATA) {
    while(cur){ out.unshift(cur); cur=cur.parentId?by[cur.parentId]:null }
    return out}
 
-  function hierBlock(rows,entityId,useChain){
+  function hierBlock(rows,entityId,useChain,otherEngagementId){
    const mine=chainUp(entityId,rows,useChain), client=chainUp(DATA.target,rows,useChain);
+   const chains=[mine,client];
+   const oeInRows = otherEngagementId && rows.some(r=>r.id===otherEngagementId);
+   if(oeInRows) chains.push(chainUp(otherEngagementId,rows,useChain));
    const depth={}; const seen=[];
-   [mine,client].forEach(ch=>ch.forEach((r,i)=>{ if(!(r.id in depth)){depth[r.id]=i; seen.push(r)} }));
+   chains.forEach(ch=>ch.forEach((r,i)=>{ if(!(r.id in depth)){depth[r.id]=i; seen.push(r)} }));
    seen.sort((x,y)=>depth[x.id]-depth[y.id]);
-   return seen.map(r=>{
-    const me=r.id===entityId, guo=r.id===DATA.guoId, cl=r.id===DATA.target;
-    return `<div class="hr${me?" me":""}">`+
-     `<span class="hi">${guo?"&#128081;":""}</span>`+
-     `<span class="hi">${cl?"&#9670;":""}</span>`+
-     `<span class="hn" style="padding-left:${depth[r.id]*16}px">${esc(r.name)}</span></div>`}).join("")}
+   // Same row markup the main table uses — target ◆, GUO 👑, audit-client
+   // 📋 (set on the other-engagement node above) and non-audit-client 💼
+   // icons, applied pill, local pill — just filtered to this chain.
+   return seen.map(r=>rowMarkup(r,depth[r.id],false)).join("")}
 
   function panel(){
    const n=byId[sel];
@@ -922,7 +941,7 @@ function initApp(DATA) {
                  ["Significant relationships",(DATA.sections&&DATA.sections.significant)||[]],
                  ["Management / board",(DATA.sections&&DATA.sections.board)||[]]];
      body=secs.filter(([,rows])=>rows.some(r=>r.id===n.id))
-       .map(([label,rows])=>`<p class="psh">${label}</p>${hierBlock(rows,n.id,label==="Tree")}`).join("")+
+       .map(([label,rows])=>`<p class="psh">${label}</p>${hierBlock(rows,n.id,label==="Tree",n.otherEngagementId)}`).join("")+
       `<p class="psh" style="margin-top:18px">Relationships to <span class="tname">${esc(DATA.targetName)}</span></p><ul class="prl">`+
        (n.relationships||[]).map((r,i)=>{
          const strongest=(i===0&&!r.blocked);
