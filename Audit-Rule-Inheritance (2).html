@@ -317,6 +317,29 @@ const WHY={
 };
 function whyText(code){ return WHY[code] || ("Country code " + code + " — framework derived from country of incorporation."); }
 
+/* Relationship CATEGORY labels for the "Relationships to <target>" list —
+   distinct from treatment (Restricted/Materiality/Judgment), which is
+   shown elsewhere via the applied pill. MAT/DRV are reasons, not
+   categories, and are filtered out before this lookup runs.
+   CTRL is a known lossy bucket — the aw vocabulary doesn't distinguish
+   direct/indirect subsidiary, board member, UBO, and majority
+   shareholder from one another; all four share this generic label. */
+const AW_CATEGORY_LABEL = {
+  AUD:  "Entity Under Audit",
+  GU:   "Global Ultimate Owner",
+  DP:   "Direct Parent",
+  IP:   "Indirect Parent",
+  CTRL: "Control-Based Relationship",
+  CC:   "Common Control Affiliate",
+  SH:   "Shareholder",
+  CA:   "Close Affiliate / Significant Influence"
+};
+function relationshipCategoryLabel(awCodes){
+  const primary = (awCodes||[]).find(c=>c!=="MAT"&&c!=="DRV");
+  if (primary) return AW_CATEGORY_LABEL[primary] || primary;
+  return "Relationship";
+}
+
 /* ─── CELESTE RESPONSE UNWRAPPER ─────────────────────────────────────────
    celeste.query returns an array of content blocks: [{type:"text",text:{...}}]
    This pulls out the first object carrying the required key, unwrapping one
@@ -496,9 +519,7 @@ function applyScreeningMap(rows, screeningMap, targetId, treeRootId, targetFwFul
         C: { fw: s.appliedFw,   code: code,  cite: cite }
       };
       n.relationships = [{
-        relationshipType:
-          s.treatment === "R" ? "Restricted" :
-          s.treatment === "M" ? "Materiality" : "Judgment",
+        relationshipType: relationshipCategoryLabel(s.awCodes),
         section: n.treeId ? "Tree" : (n.section || "Tree"),
         restrictionBasis:
           s.treatment === "R" ? "automatic" :
@@ -630,6 +651,7 @@ async function loadSearch() {
             n.mn === "G" ? "These values disagreed with the firm record; the firm record was used." : null,
           localWhyList:   (n.lw || []).map(whyText),
           appliedWhyList: (n.aw || []).map(whyText),
+          awCodes:        n.aw || [],
           otherEngagementId: n.oe || null
         };
       });
