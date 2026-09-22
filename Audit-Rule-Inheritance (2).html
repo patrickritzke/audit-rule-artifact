@@ -281,40 +281,80 @@ const CITE={
   "GAO":       "Government Auditing Standards (Yellow Book) — Independence"
 };
 
-/* ─── AFFILIATION KEYS ───────────────────────────────────────────────────
-   Search parties are matched on affiliation KEY, never on display name.
-   Names are tenant-editable; keys are not.
+/* ─── AFFILIATIONS ───────────────────────────────────────────────────────
+   A search party carries its affiliation in `affiliationType`. The API sends
+   the DISPLAY NAME there ("Audit Affiliate - IESBA - Materiality"), not the
+   key, so both forms are accepted: the name is what arrives today, the key
+   is stable if the API ever starts sending it.
 
-     AUDIT-Target        the entity this report is about
-     AUDAFF-<FW>-<T>     an audit affiliate — the key itself carries the
-                         framework token and the treatment
-     AUDAFF-UNK-REVIEW   framework undetermined, route to manual review
+     AUDIT-Target      / "Audit Rule Target"
+     AUDAFF-<FW>-<T>   / "Audit Affiliate - <framework> - <treatment>"
+     AUDAFF-UNK-REVIEW / "Audit Affiliate - Framework Undetermined - Manual Review"
+
+   Either form carries the applied framework and the treatment, and it is the
+   ONLY place they appear — relationshipTypes comes back empty on every party.
 
    The AUDAFF framework tokens are their own namespace and do NOT match the
-   notes tokens in FW_FULL (notes use IEP/IES to split IESBA from IESBA-PIE;
-   the affiliation keys carry a single IES = IESBA).                        */
-const AFF_TARGET = "AUDIT-Target";
-const AFF_PREFIX = "AUDAFF-";
+   AUDIT-payload tokens in FW_FULL (the payload uses IEP/IES to split IESBA
+   from IESBA-PIE; an affiliation carries a single IES = IESBA).            */
+const AFF_TARGET_KEY  = "AUDIT-Target";
+const AFF_TARGET_NAME = "Audit Rule Target";
+const AFF_PREFIX      = "AUDAFF-";
+
 const AFF_FW = {
   SEC:"SEC/PCAOB", AIC:"AICPA", IES:"IESBA", EU5:"EU-537",
   UKF:"UK-FRC",    DOL:"DOL",   GAO:"GAO",   UNK:"UNKNOWN"
 };
 const AFF_TREAT = { R:"R", M:"M", J:"J", X:"X", REVIEW:"U" };
-/* IESBA and IESBA-PIE are one family: an AUDAFF-IES-* key does not say
-   which of the two, so the entity's own local value keeps its precision. */
+/* Display-name spellings, which differ from the internal ones. */
+const AFF_FW_NAME = {
+  SEC:"SEC/PCAOB", AIC:"AICPA", IES:"IESBA", EU5:"EU 537/2014",
+  UKF:"UK FRC",    DOL:"DOL",   GAO:"GAO",   UNK:"Framework Undetermined"
+};
+const AFF_TREAT_NAME = {
+  R:"Restricted", M:"Materiality", J:"Judgment", X:"Excluded", REVIEW:"Manual Review"
+};
+
+/* key -> {fw,treatment} and display name -> {fw,treatment}, built once. */
+const AFF_BY_KEY = {}, AFF_BY_NAME = {};
+Object.keys(AFF_FW).forEach(fwTok => {
+  Object.keys(AFF_TREAT).forEach(tTok => {
+    /* UNK pairs only with REVIEW; every other framework only with R/M/J/X. */
+    if ((fwTok === "UNK") !== (tTok === "REVIEW")) return;
+    const v = { fw: AFF_FW[fwTok], treatment: AFF_TREAT[tTok] };
+    AFF_BY_KEY[AFF_PREFIX + fwTok + "-" + tTok] = v;
+    AFF_BY_NAME["Audit Affiliate - " + AFF_FW_NAME[fwTok] + " - " + AFF_TREAT_NAME[tTok]] = v;
+  });
+});
+
+/* IESBA and IESBA-PIE are one family: an AUDAFF-IES-* affiliation does not
+   say which of the two, so the entity's own local value keeps its precision. */
 const FW_FAMILY = { "IESBA":"IESBA", "IESBA-PIE":"IESBA" };
 const fwFamily  = fw => FW_FAMILY[fw] || fw;
 
-/* Splits an affiliation key into { fw, treatment }, or null when the key is
-   not an audit-affiliate key. */
-function parseAffiliationKey(key) {
-  if (typeof key !== "string" || key.indexOf(AFF_PREFIX) !== 0) return null;
-  const parts = key.slice(AFF_PREFIX.length).split("-");
-  if (parts.length < 2) return null;
-  const fw = AFF_FW[parts[0]];
-  const t  = AFF_TREAT[parts.slice(1).join("-")];
-  if (!fw || !t) return null;
-  return { fw: fw, treatment: t };
+const isTargetAffiliation = v =>
+  v === AFF_TARGET_KEY || (typeof v === "string" && v.trim() === AFF_TARGET_NAME);
+
+/* Resolves an affiliationType — key or display name — to { fw, treatment }.
+   null when it is not an audit-affiliate affiliation. */
+function resolveAffiliation(v) {
+  if (typeof v !== "string") return null;
+  return AFF_BY_KEY[v.trim()] || AFF_BY_NAME[v.trim()] || null;
+}
+
+/* ─── PER-ENTITY AUDIT PAYLOAD ───────────────────────────────────────────
+   The screener writes its payload into terms[] as a string prefixed
+   "AUDIT:". Search parties have no notes field.                           */
+const AUDIT_TERM_PREFIX = "AUDIT:";
+function auditPayload(party) {
+  const terms = (party && party.terms) || [];
+  for (let i = 0; i < terms.length; i++) {
+    const t = terms[i];
+    if (typeof t === "string" && t.indexOf(AUDIT_TERM_PREFIX) === 0) {
+      try { return JSON.parse(t.slice(AUDIT_TERM_PREFIX.length)); } catch (e) { return {}; }
+    }
+  }
+  return {};
 }
 const RT_MAP={
   "SEC/PCAOB — Restricted":        { fw:"SEC/PCAOB",  t:"R" },
@@ -378,18 +418,32 @@ function extractObj(raw, key) {
 }
 
 /* ─── TREE FLATTEN ────────────────────────────────────────────────────── */
-function flattenTree(node, parentId, treeId, out, seen) {
+function flattenTree(node, parentId, treeId, out, seen, expanded) {
   if (!node || !node.externalId) return;
-  if (seen.has(node.externalId)) return;
-  seen.add(node.externalId);
-  out.push({
-    id:       node.externalId,
-    name:     node.name || node.externalId,
-    country:  node.country || null,
-    parentId: parentId,
-    treeId:   treeId
-  });
-  (node.subCompanies || []).forEach(c => flattenTree(c, node.externalId, treeId, out, seen));
+  expanded = expanded || new Set();
+  const id   = node.externalId;
+  const kids = node.subCompanies || [];
+
+  if (!seen.has(id)) {
+    seen.add(id);
+    out.push({
+      id:       id,
+      name:     node.name || id,
+      country:  node.country || null,
+      parentId: parentId,
+      treeId:   treeId
+    });
+  }
+
+  /* A provider tree can list the same company more than once — commonly as a
+     childless stub in one place and with its full subtree in another. Bailing
+     out on the repeat would drop every descendant below it, so expand
+     whichever occurrence carries children, once per company. The first
+     occurrence seen still decides where the company is drawn.              */
+  if (kids.length && !expanded.has(id)) {
+    expanded.add(id);
+    kids.forEach(c => flattenTree(c, id, treeId, out, seen, expanded));
+  }
 }
 
 /* ─── CHAIN BUILDER ───────────────────────────────────────────────────── */
@@ -449,16 +503,17 @@ async function loadSearch() {
     const parties = search.searchParties || [];
     if (!parties.length) throw new Error("Search " + sid + " has no search parties.");
 
-    const targetParty = parties.find(p => p.affiliationType === AFF_TARGET);
-    if (!targetParty) throw new Error("No party with affiliation " + AFF_TARGET + " found in search " + sid + ".");
+    const targetParty = parties.find(p => isTargetAffiliation(p.affiliationType));
+    if (!targetParty) throw new Error('No "' + AFF_TARGET_NAME + '" party found in search ' + sid + ".");
 
-    const tgtNotes = JSON.parse(targetParty.notes || "{}");
-    const targetId   = tgtNotes.x || targetParty.name;
-    const targetFwTok = tgtNotes.l || "IEP";
-    const targetFwFull = FW_FULL[targetFwTok] || "IESBA";
+    /* The target's id must be the provider id the tree nodes are keyed on —
+       its name is not in the tree. The target normally carries no AUDIT
+       payload of its own, so externalId/partyId is the reliable source. */
+    const tgtNotes = auditPayload(targetParty);
+    const targetId = tgtNotes.x || targetParty.externalId || targetParty.partyId || targetParty.name;
 
     const treeEntry = (targetParty.corporateTrees || [])[0];
-    if (!treeEntry || !treeEntry.rootCompany) throw new Error("AUDIT-Target party has no corporate tree. Ensure the party was added with a tree attached.");
+    if (!treeEntry || !treeEntry.rootCompany) throw new Error('The "' + AFF_TARGET_NAME + '" party has no corporate tree. Ensure the party was added with a tree attached.');
 
     const treeRootId = treeEntry.rootCompanyId || treeEntry.rootCompany.externalId;
     const treeName   = treeEntry.name || treeEntry.rootCompany.name;
@@ -466,28 +521,44 @@ async function loadSearch() {
     const nodes = [];
     flattenTree(treeEntry.rootCompany, null, treeRootId, nodes, new Set());
 
+    const affiliateParties = parties
+      .map(p => ({ party: p, aff: resolveAffiliation(p.affiliationType) }))
+      .filter(x => x.aff);
+
+    /* The engagement framework is the one the target's own record governs by.
+       The target party normally carries no AUDIT payload, so fall back to the
+       framework its affiliates were screened under — but only when they all
+       agree. A disagreement means it cannot be read off this response, and
+       guessing one would silently mis-state every policy-A code. */
+    const affFws = [...new Set(affiliateParties
+      .map(x => x.aff.fw).filter(fw => fw !== "UNKNOWN"))];
+    const targetFwFull =
+      (tgtNotes.l && FW_FULL[tgtNotes.l]) ||
+      (affFws.length === 1 ? affFws[0] : "UNKNOWN");
+
     const screeningMap = {};
-    parties
-      .filter(p => parseAffiliationKey(p.affiliationType))
-      .forEach(p => {
-        const n = JSON.parse(p.notes || "{}");
+    affiliateParties
+      .forEach(({ party: p, aff: aff }) => {
+        const n = auditPayload(p);
         if (!n.x) return;
-        const aff = parseAffiliationKey(p.affiliationType);
         const rt = (p.relationshipTypes || [])[0] || null;
         const mapped = rt ? RT_MAP[rt] : null;
         const localFwFull = FW_FULL[n.l] || "IESBA";
 
-        /* The affiliation key is the determination; relationshipTypes is only
-           a fallback for a key that names no framework (AUDAFF-UNK-REVIEW). */
-        const keyFw = aff.fw === "UNKNOWN" ? null : aff.fw;
+        /* The affiliation is the determination; relationshipTypes is only a
+           fallback for an affiliation naming no framework (UNK / Manual
+           Review), and comes back empty on every party in practice. */
+        const affFw = aff.fw === "UNKNOWN" ? null : aff.fw;
         const appliedFw =
-          keyFw ? (fwFamily(keyFw) === fwFamily(localFwFull) ? localFwFull : keyFw)
+          affFw ? (fwFamily(affFw) === fwFamily(localFwFull) ? localFwFull : affFw)
                 : (mapped ? mapped.fw : localFwFull);
 
         screeningMap[n.x] = {
+          name:             p.name,
           appliedFw:        appliedFw,
           treatment:        aff.treatment || (mapped ? mapped.t : null),
           local:            localFwFull,
+          relWhy:           (n.aw || [])[0] || null,
           localStricter:    n.ls || false,
           localStricterWhy: n.lsw || null,
           dormant:          n.d  || false,
@@ -505,14 +576,14 @@ async function loadSearch() {
         };
       });
 
-    nodes.forEach(n => {
+    function decorate(n, section) {
       const s = screeningMap[n.id];
 
-      n.marks = {};
+      n.marks = n.marks || {};
       if (n.id === targetId)   n.marks.client  = true;
       if (n.id === treeRootId) n.marks.ultimate = true;
 
-      if (!s) return;
+      if (!s) return n;
 
       n.local            = s.local;
       n.localStricter    = s.localStricter;
@@ -548,7 +619,7 @@ async function loadSearch() {
             s.treatment === "M" ? "Materiality" :
             s.treatment === "U" ? "Undetermined" :
             s.treatment === "X" ? "Excluded" : "Judgment",
-          section: "Tree",
+          section: section,
           restrictionBasis:
             s.treatment === "R" ? "automatic" :
             s.treatment === "M" ? "materiality" :
@@ -558,6 +629,26 @@ async function loadSearch() {
           citation: cite
         }];
       }
+      return n;
+    }
+
+    nodes.forEach(n => decorate(n, "Tree"));
+
+    /* Screened entities that are not tree nodes still have to appear, or the
+       screening list silently loses them. A board member of the target goes
+       to Management / board; anything else to Significant relationships.  */
+    const treeIds = new Set(nodes.map(n => n.id));
+    const boardIds = new Set(
+      (((targetParty.boardMembers || {}).boardMembers) || []).map(b => b.id).filter(Boolean));
+
+    const significant = [], board = [];
+    Object.keys(screeningMap).forEach(id => {
+      if (treeIds.has(id)) return;
+      const s = screeningMap[id];
+      const row = decorate(
+        { id: id, name: s.name || id, parentId: null, treeId: null },
+        boardIds.has(id) ? "Management / board" : "Significant relationships");
+      (boardIds.has(id) ? board : significant).push(row);
     });
 
     buildChains(nodes, targetId);
@@ -570,9 +661,9 @@ async function loadSearch() {
       engagementFramework: targetFwFull,
       trees:               [{ id: treeRootId, name: treeName }],
       nodes:               nodes,
-      sections:            { significant: [], board: [] },
-      sectionModes:        { significant: "tree", board: "flat" },
-      sectionCounts:       { significant: 0, board: 0 },
+      sections:            { significant: significant, board: board },
+      sectionModes:        { significant: "flat", board: "flat" },
+      sectionCounts:       { significant: significant.length, board: board.length },
       legend: {
         R: { label:"Restricted — by rule",            rule: CITE[targetFwFull]||"", help:"Control-based. No further test." },
         M: { label:"Materiality — screener runs test", rule: CITE[targetFwFull]||"", help:"Classified from structure; the screening application runs the test." }
