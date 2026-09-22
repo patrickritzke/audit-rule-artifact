@@ -238,13 +238,15 @@ select:focus{outline:1px solid var(--color-primary-light);outline-offset:1px}
 const FWC={"SEC/PCAOB":["#8C1D1D","#FBEAEA","#F0CCCC"],"EU-537":["#0E54A9","#E4EDFA","#C2D6EF"],
 "UK-FRC":["#3A3A9E","#E9EAFA","#CDCFF0"],"IESBA":["#0F5F49","#E3F2EC","#C0E0D3"],
 "IESBA-PIE":["#0F5F49","#E3F2EC","#C0E0D3"],"AICPA":["#7A4A12","#FBF1DE","#F0DDB4"],
+"DOL":["#0F4C5C","#E3EFF3","#C0DBE4"],"GAO":["#5B3A7A","#F0EAF7","#DCCFEA"],
 "UNKNOWN":["#253955","#F0F2F5","#DDE2E8"]};
-const LBL={SEC:"US Securities and Exchange Commission, Rule 2-01",AIC:"American Institute of Certified Public Accountants, Code of Professional Conduct",IES:"International Ethics Standards Board for Accountants, Code of Ethics",EU5:"European Union, Audit Regulation 537/2014",UKF:"Financial Reporting Council, Ethical Standard for Auditors",UNK:"Not determined"};
+const LBL={SEC:"US Securities and Exchange Commission, Rule 2-01",AIC:"American Institute of Certified Public Accountants, Code of Professional Conduct",IES:"International Ethics Standards Board for Accountants, Code of Ethics",EU5:"European Union, Audit Regulation 537/2014",UKF:"Financial Reporting Council, Ethical Standard for Auditors",DOL:"US Department of Labor, ERISA plan audit independence rules",GAO:"US Government Accountability Office, Government Auditing Standards",UNK:"Not determined"};
 const FWA={"SEC/PCAOB":"SEC","AICPA":"AIC","IESBA":"IES","IESBA-PIE":"IES",
-"EU-537":"EU5","UK-FRC":"UKF","UNKNOWN":"UNK"};
+"EU-537":"EU5","UK-FRC":"UKF","DOL":"DOL","GAO":"GAO","UNKNOWN":"UNK"};
 const TREAT={R:["Restricted","Control-based. The rule applies no further test — block the hit."],
 M:["Materiality","Classified from structure; the screening application runs the test."],
 J:["Judgment","In scope only under the general standard — route to a reviewer."],
+U:["Undetermined","Framework could not be resolved — route to manual review."],
 X:["Excluded","Determined out of scope downstream. This skill never emits X."]};
 const POLICY={
  "C":["Stricter (Target Entity vs. Local vs. Other Rule Inheritance)",
@@ -253,14 +255,16 @@ const POLICY={
    "For each entity, whichever is stricter - the target entity's framework, or that entity's own local regime. Other audit clients are ignored."],
  "A":["Target Entity Jurisdiction Only",
    "The framework recorded on the target entity governs every entity in the report. Each entity's own regime is still resolved and shown, but never applied."]};
-const TBAR={R:{w:"5px",st:"solid",c:null},M:{w:"5px",st:"solid",c:"#C98A12"},J:{w:"5px",st:"dotted",c:"#888888"}};
-const TLABEL={R:"Restricted — by rule",M:"Materiality — screener runs the test",J:"Judgment",X:"Excluded — no badge"};
+const TBAR={R:{w:"5px",st:"solid",c:null},M:{w:"5px",st:"solid",c:"#C98A12"},J:{w:"5px",st:"dotted",c:"#888888"},
+U:{w:"5px",st:"dashed",c:"#888888"}};
+const TLABEL={R:"Restricted — by rule",M:"Materiality — screener runs the test",J:"Judgment",U:"Undetermined — manual review",X:"Excluded — no badge"};
 
 /* ─── EXTRA DICTIONARIES (needed to translate the raw celeste payload
    into the DATA shape above — not part of the display template) ────────── */
 const FWA_REV={
   "SEC/PCAOB":"SEC","UK-FRC":"UKF","EU-537":"EU5",
-  "IESBA-PIE":"IES","IESBA":"IEP","AICPA":"AIC"
+  "IESBA-PIE":"IES","IESBA":"IEP","AICPA":"AIC",
+  "DOL":"DOL","GAO":"GAO","UNKNOWN":"UNK"
 };
 const FW_FULL={
   IEP:"IESBA", IES:"IESBA-PIE", SEC:"SEC/PCAOB",
@@ -272,8 +276,46 @@ const CITE={
   "EU-537":    "Regulation (EU) 537/2014",
   "IESBA-PIE": "IESBA Code of Ethics, Section 600",
   "IESBA":     "IESBA Code of Ethics, Section 400",
-  "AICPA":     "AICPA Code of Professional Conduct, 1.224"
+  "AICPA":     "AICPA Code of Professional Conduct, 1.224",
+  "DOL":       "29 CFR 2509.75-9 (ERISA Interpretive Bulletin 75-9)",
+  "GAO":       "Government Auditing Standards (Yellow Book) — Independence"
 };
+
+/* ─── AFFILIATION KEYS ───────────────────────────────────────────────────
+   Search parties are matched on affiliation KEY, never on display name.
+   Names are tenant-editable; keys are not.
+
+     AUDIT-Target        the entity this report is about
+     AUDAFF-<FW>-<T>     an audit affiliate — the key itself carries the
+                         framework token and the treatment
+     AUDAFF-UNK-REVIEW   framework undetermined, route to manual review
+
+   The AUDAFF framework tokens are their own namespace and do NOT match the
+   notes tokens in FW_FULL (notes use IEP/IES to split IESBA from IESBA-PIE;
+   the affiliation keys carry a single IES = IESBA).                        */
+const AFF_TARGET = "AUDIT-Target";
+const AFF_PREFIX = "AUDAFF-";
+const AFF_FW = {
+  SEC:"SEC/PCAOB", AIC:"AICPA", IES:"IESBA", EU5:"EU-537",
+  UKF:"UK-FRC",    DOL:"DOL",   GAO:"GAO",   UNK:"UNKNOWN"
+};
+const AFF_TREAT = { R:"R", M:"M", J:"J", X:"X", REVIEW:"U" };
+/* IESBA and IESBA-PIE are one family: an AUDAFF-IES-* key does not say
+   which of the two, so the entity's own local value keeps its precision. */
+const FW_FAMILY = { "IESBA":"IESBA", "IESBA-PIE":"IESBA" };
+const fwFamily  = fw => FW_FAMILY[fw] || fw;
+
+/* Splits an affiliation key into { fw, treatment }, or null when the key is
+   not an audit-affiliate key. */
+function parseAffiliationKey(key) {
+  if (typeof key !== "string" || key.indexOf(AFF_PREFIX) !== 0) return null;
+  const parts = key.slice(AFF_PREFIX.length).split("-");
+  if (parts.length < 2) return null;
+  const fw = AFF_FW[parts[0]];
+  const t  = AFF_TREAT[parts.slice(1).join("-")];
+  if (!fw || !t) return null;
+  return { fw: fw, treatment: t };
+}
 const RT_MAP={
   "SEC/PCAOB — Restricted":        { fw:"SEC/PCAOB",  t:"R" },
   "SEC/PCAOB — Materiality":       { fw:"SEC/PCAOB",  t:"M" },
@@ -407,11 +449,8 @@ async function loadSearch() {
     const parties = search.searchParties || [];
     if (!parties.length) throw new Error("Search " + sid + " has no search parties.");
 
-    const targetParty = parties.find(p =>
-      p.affiliationType === "AUDIT-Target" ||
-      p.affiliationType === "Audit Client"
-    );
-    if (!targetParty) throw new Error("No AUDIT-Target party found in search " + sid + ".");
+    const targetParty = parties.find(p => p.affiliationType === AFF_TARGET);
+    if (!targetParty) throw new Error("No party with affiliation " + AFF_TARGET + " found in search " + sid + ".");
 
     const tgtNotes = JSON.parse(targetParty.notes || "{}");
     const targetId   = tgtNotes.x || targetParty.name;
@@ -429,17 +468,25 @@ async function loadSearch() {
 
     const screeningMap = {};
     parties
-      .filter(p => p.affiliationType === "AUDIT-Rule" ||
-                   p.affiliationType === "Audit Rule Affiliate")
+      .filter(p => parseAffiliationKey(p.affiliationType))
       .forEach(p => {
         const n = JSON.parse(p.notes || "{}");
         if (!n.x) return;
+        const aff = parseAffiliationKey(p.affiliationType);
         const rt = (p.relationshipTypes || [])[0] || null;
         const mapped = rt ? RT_MAP[rt] : null;
         const localFwFull = FW_FULL[n.l] || "IESBA";
+
+        /* The affiliation key is the determination; relationshipTypes is only
+           a fallback for a key that names no framework (AUDAFF-UNK-REVIEW). */
+        const keyFw = aff.fw === "UNKNOWN" ? null : aff.fw;
+        const appliedFw =
+          keyFw ? (fwFamily(keyFw) === fwFamily(localFwFull) ? localFwFull : keyFw)
+                : (mapped ? mapped.fw : localFwFull);
+
         screeningMap[n.x] = {
-          appliedFw:        mapped ? mapped.fw : localFwFull,
-          treatment:        mapped ? mapped.t  : null,
+          appliedFw:        appliedFw,
+          treatment:        aff.treatment || (mapped ? mapped.t : null),
           local:            localFwFull,
           localStricter:    n.ls || false,
           localStricterWhy: n.lsw || null,
@@ -479,13 +526,13 @@ async function loadSearch() {
       n.appliedLabel     = LBL[FWA[s.appliedFw]]   || s.appliedFw;
 
       if (s.treatment) {
-        const originCB = (s.local === s.appliedFw) ? "D" : "I";
-        const fwTokCB  = FWA_REV[s.appliedFw] || "IEP";
+        const originCB = (fwFamily(s.local) === fwFamily(s.appliedFw)) ? "D" : "I";
+        const fwTokCB  = FWA_REV[s.appliedFw] || "UNK";
         const code     = fwTokCB + "-" + s.treatment + "GN-" + originCB;
         const cite     = CITE[s.appliedFw] || "";
 
-        const originA  = (s.local === targetFwFull) ? "D" : "I";
-        const fwTokA   = FWA_REV[targetFwFull] || "IEP";
+        const originA  = (fwFamily(s.local) === fwFamily(targetFwFull)) ? "D" : "I";
+        const fwTokA   = FWA_REV[targetFwFull] || "UNK";
         const codeA    = fwTokA + "-" + s.treatment + "GN-" + originA;
 
         n.code = code;
@@ -498,11 +545,15 @@ async function loadSearch() {
         n.relationships = [{
           relationshipType:
             s.treatment === "R" ? "Restricted" :
-            s.treatment === "M" ? "Materiality" : "Judgment",
+            s.treatment === "M" ? "Materiality" :
+            s.treatment === "U" ? "Undetermined" :
+            s.treatment === "X" ? "Excluded" : "Judgment",
           section: "Tree",
           restrictionBasis:
             s.treatment === "R" ? "automatic" :
-            s.treatment === "M" ? "materiality" : "judgment",
+            s.treatment === "M" ? "materiality" :
+            s.treatment === "U" ? "undetermined" :
+            s.treatment === "X" ? "excluded" : "judgment",
           screeningCode: code,
           citation: cite
         }];
@@ -697,7 +748,8 @@ function initApp(DATA) {
    const L=DATA.legend||{};
    const seenFw={};
    rows.forEach(n=>{if(n.local)seenFw[n.local]=(seenFw[n.local]||0)+1});
-   const ORDFW={"SEC/PCAOB":0,"EU-537":1,"UK-FRC":2,"IESBA-PIE":3,"IESBA":4,"AICPA":5,"UNKNOWN":6};
+   const ORDFW={"SEC/PCAOB":0,"EU-537":1,"UK-FRC":2,"IESBA-PIE":3,"IESBA":4,"AICPA":5,
+                "DOL":6,"GAO":7,"UNKNOWN":8};
    const lc=Object.entries(seenFw).map(([fw,n])=>({fw,n}))
      .sort((a,b)=>(ORDFW[a.fw]??9)-(ORDFW[b.fw]??9)||b.n-a.n);
    const cols=[...lc].sort((a,b)=>(a.fw===DATA.engagementFramework?-1:0)-(b.fw===DATA.engagementFramework?-1:0));
@@ -718,7 +770,7 @@ function initApp(DATA) {
      `${esc(FWA[e.fw]||"UNK")}</span>`};
 
    const acell=fw=>{
-    const ORD={R:0,M:1,J:2,X:3};
+    const ORD={R:0,M:1,J:2,U:3,X:4};
     return Object.entries(cnt).filter(([k])=>k.split("|")[0]===fw)
      .sort((a,b)=>(ORD[a[0].split("|")[1]]??9)-(ORD[b[0].split("|")[1]]??9)||b[1]-a[1])
      .map(([k,v])=>{ const t=k.split("|")[1];
