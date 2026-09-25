@@ -287,11 +287,9 @@ const CITE={
    key, so both forms are accepted: the name is what arrives today, the key
    is stable if the API ever starts sending it.
 
-     AUDIT-Target      / "Audit Rule Target" / "Audit Client"
+     AUDIT-Target      / "Audit Rule Target"
      AUDAFF-<FW>-<T>   / "Audit Affiliate - <framework> - <treatment>"
-                       / "Audit Aff Rule - <fw> — <treatment>"   (skill picklist names)
      AUDAFF-UNK-REVIEW / "Audit Affiliate - Framework Undetermined - Manual Review"
-                       / "Audit Aff Rule - Undetermined"
 
    Either form carries the applied framework and the treatment, and it is the
    ONLY place they appear — relationshipTypes comes back empty on every party.
@@ -328,20 +326,6 @@ Object.keys(AFF_FW).forEach(fwTok => {
     AFF_BY_NAME["Audit Affiliate - " + AFF_FW_NAME[fwTok] + " - " + AFF_TREAT_NAME[tTok]] = v;
   });
 });
-/* Skill-emitted names: "Audit Aff Rule - <FW> — <Treatment>" (em dash). */
-const SKILL_AFF_FW = {
-  "SEC/PCAOB": AFF_FW.SEC, "AICPA": AFF_FW.AIC,
-  "IESBA":     AFF_FW.IES, "IESBA PIE": "IESBA-PIE",
-  "FRC":       AFF_FW.UKF, "EU": AFF_FW.EU5
-};
-const SKILL_AFF_T = { "Restricted":"R", "Materiality":"M", "Judgment":"J", "Excluded":"X" };
-Object.keys(SKILL_AFF_FW).forEach(fwL => {
-  Object.keys(SKILL_AFF_T).forEach(tL => {
-    AFF_BY_NAME["Audit Aff Rule - " + fwL + " — " + tL] =
-      { fw: SKILL_AFF_FW[fwL], treatment: SKILL_AFF_T[tL] };
-  });
-});
-AFF_BY_NAME["Audit Aff Rule - Undetermined"] = { fw: AFF_FW.UNK, treatment: "U" };
 
 /* IESBA and IESBA-PIE are one family: an AUDAFF-IES-* affiliation does not
    say which of the two, so the entity's own local value keeps its precision. */
@@ -349,8 +333,7 @@ const FW_FAMILY = { "IESBA":"IESBA", "IESBA-PIE":"IESBA" };
 const fwFamily  = fw => FW_FAMILY[fw] || fw;
 
 const isTargetAffiliation = v =>
-  v === AFF_TARGET_KEY || (typeof v === "string" &&
-    (v.trim() === AFF_TARGET_NAME || v.trim() === "Audit Client"));
+  v === AFF_TARGET_KEY || (typeof v === "string" && v.trim() === AFF_TARGET_NAME);
 
 /* Resolves an affiliationType — key or display name — to { fw, treatment }.
    null when it is not an audit-affiliate affiliation. */
