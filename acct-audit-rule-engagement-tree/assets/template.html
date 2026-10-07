@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audit Rule Engagement Tree</title>
+<style>
+:root{--bg:#FAFAFA;--surface:#fff;--ink:#021123;--text:#253955;--muted:#6b7684;--line:#E7EBEF;
+--primary:#0E54A9;--audit:#0E54A9;--non:#B45309;--pill-bg:#EFF4FA;--pill-ink:#0E54A9;--warn-bg:#FFF7E6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1520;--surface:#142033;--ink:#EAF0F7;--text:#C3CEDB;--muted:#8d9bab;--line:#243449;--primary:#6aa8ff;--audit:#6aa8ff;--non:#f2a65a;--pill-bg:#1d3150;--pill-ink:#9cc4ff;--warn-bg:#2b2416}}
+:root[data-theme="dark"]{--bg:#0d1520;--surface:#142033;--ink:#EAF0F7;--text:#C3CEDB;--muted:#8d9bab;--line:#243449;--primary:#6aa8ff;--audit:#6aa8ff;--non:#f2a65a;--pill-bg:#1d3150;--pill-ink:#9cc4ff;--warn-bg:#2b2416}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Manrope,system-ui,Arial,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:24px 16px 40px}
+h1{font-size:20px;margin:0;font-weight:600}
+.sub{color:var(--muted);font-size:12px;margin:2px 0 16px}
+.assess{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--primary);border-radius:6px;padding:12px 14px;margin-bottom:14px}
+.assess.warn{border-left-color:var(--non);background:var(--warn-bg)}
+.assess .head{font-weight:600;color:var(--ink)}
+.assess ul{margin:6px 0 0;padding-left:18px;color:var(--text);font-size:13px}
+.key{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text);margin:0 0 8px}
+.tree{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 0}
+.row{display:flex;align-items:center;gap:8px;padding:3px 12px 3px calc(12px + var(--d)*20px);font-size:13px;min-height:28px}
+.row.anc{color:var(--muted)}
+.row .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .sp{flex:1}
+.tw{color:var(--line);width:10px;flex:none}
+.ind{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;white-space:nowrap}
+.ind i{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.ind.a{color:var(--audit)}.ind.a i{background:var(--audit)}
+.ind.n{color:var(--non)}.ind.n i{border:2px solid var(--non)}
+.pill{font-size:11px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--pill-bg);color:var(--pill-ink);white-space:nowrap}
+.pill.unk{background:transparent;border:1px dashed var(--muted);color:var(--muted)}
+.foot{color:var(--muted);font-size:11px;margin-top:10px}
+</style></head><body><div class="wrap">
+<h1 id="t"></h1><div class="sub" id="s"></div>
+<div class="assess" id="as"></div>
+<div class="key"><span class="ind a"><i></i>Audit client</span><span class="ind n"><i></i>Non-audit client</span><span><span class="pill">Jurisdiction</span> of an engaged party</span><span style="color:var(--muted)">Grey = shown only to keep the hierarchy intact</span></div>
+<div class="tree" id="tr"></div>
+<div class="foot" id="f"></div>
+</div>
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function(){
+var D=JSON.parse(document.getElementById('data').textContent);
+function e(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+document.getElementById('t').textContent='Audit rule for '+D.guo.name;
+document.getElementById('s').textContent='Ultimate owner '+D.guo.bvdId+' · '+D.counts.engaged+' engaged of '+D.counts.total+' parties in the family';
+var A=D.assessment,as=document.getElementById('as');
+if(A.warn)as.className+=' warn';
+as.innerHTML='<div class="head">'+e(A.headline)+'</div>'+(A.points&&A.points.length?'<ul>'+A.points.map(function(p){return'<li>'+e(p)+'</li>'}).join('')+'</ul>':'');
+var h=[];
+D.nodes.forEach(function(n){
+ var m='';
+ if(n.audit)m+='<span class="ind a" title="Audit client"><i></i>Audit</span>';
+ if(n.nonAudit)m+='<span class="ind n" title="Non-audit client"><i></i>Non-audit</span>';
+ var p=(n.audit||n.nonAudit)?'<span class="pill'+(n.jur==='UNKNOWN'?' unk':'')+'">'+e(n.jur)+'</span>':'';
+ h.push('<div class="row'+((n.audit||n.nonAudit)?'':' anc')+'" style="--d:'+n.depth+'"><span class="tw">'+(n.depth?'└':'')+'</span><span class="nm" title="'+e(n.name)+'">'+e(n.name)+'</span><span class="sp"></span>'+m+p+'</div>');
+});
+document.getElementById('tr').innerHTML=h.join('');
+document.getElementById('f').textContent=D.footer||'';
+})();
+</script></body></html>
