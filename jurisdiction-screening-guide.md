@@ -14,7 +14,7 @@ Everything is relative to the target. The target can be anywhere in the tree and
 | ✅ | Taken directly from the `acct-independence-rules` / `acct-audit-rule-conflicts` skills |
 | ⚠️ | My own addition. **Unverified.** Confirm with your independence / policy team before relying on it |
 
-The skills use **one shared category table** for all four jurisdictions. Only the rule citation changes, plus one IESBA exception. So the four tables below look similar. The ⚠️ rows are where I think the real rules may differ and the skills don't say.
+The skills use **one shared category table** for all five jurisdictions (SEC, AICPA, IESBA-PIE, IESBA, EU-537). Only the rule citation changes, plus one IESBA exception. So the tables below look similar. The ⚠️ rows are where I think the real rules may differ and the skills don't say.
 
 ## Relationship vocabulary
 
@@ -112,17 +112,44 @@ Same table as IESBA-PIE, with one difference the skills do encode:
 
 ---
 
+## EU (EU Regulation 537/2014)
+
+Source: Regulation (EU) 537/2014, Art. 5. The skills cite only "Art. 5" for every row. They give no per-prong reference.
+
+| Relationship to the target | Category | Basis |
+|---|---|---|
+| The target itself | **Restricted** | ✅ Art. 5 |
+| Ultimate / Immediate / Indirect Parent | **Restricted** | ✅ Art. 5 |
+| Immediate / Indirect Subsidiary | **Restricted** | ✅ Art. 5 |
+| Board / management | **Restricted** | ✅ |
+| Beneficial owner | **Restricted** | ✅ |
+| Shareholder over 50% (or "CTP") | **Restricted** | ✅ control |
+| Shareholder 20–50% | **Materiality Check** | ✅ significant influence |
+| Sibling / Cousin | **Materiality Check**, two-leg test | ✅ common control |
+| Close-affiliate-only entity | **Materiality Check** | ✅ down / up |
+| Shareholder under 20% | Neither (judgment only) | ✅ general standard |
+
+⚠️ My understanding, not from the skills and unverified: Art. 5 prohibits certain non-audit services to the audited entity, its parent undertaking and its controlled undertakings within the Union. If that is right, siblings and cousins may be out of scope rather than a Materiality Check. The skills' common-control row may be broader than the regulation.
+
+Related notes from the skills:
+
+- EU-537 is the **strictest** framework in the skills' ordering (SEC 6, EU-537 5, UK-FRC 4, IESBA-PIE 3, IESBA 2, AICPA 1). That ordering is a stated convention, not a legal hierarchy.
+- UK-FRC (the UK Financial Reporting Council Ethical Standard) is modelled with the same categories as EU-537. It shares the EU token, so UK runs also cite "Reg 537/2014 Art. 5" instead of an FRC reference. That is a known defect in the skills.
+- A company listed on an EU, EEA or UK exchange resolves to EU-537, even a UK one. An unlisted UK company resolves to UK-FRC.
+
+---
+
 ## Side by side
 
-| Relationship to the target | SEC | AICPA | IESBA-PIE | IESBA |
-|---|---|---|---|---|
-| Target, parents, subsidiaries | Restricted | Restricted | Restricted | Restricted |
-| Board, beneficial owner | Restricted | Restricted | Restricted | Restricted |
-| Shareholder over 50% / CTP | Restricted | Restricted | Restricted | Restricted |
-| Shareholder 20–50% | Materiality Check | Materiality Check | Materiality Check | Undetermined (needs listing) |
-| Sibling / Cousin | Materiality Check | Materiality Check | Materiality Check | Undetermined (needs listing) |
-| Close-affiliate-only | Materiality Check | Materiality Check | Materiality Check | Undetermined (needs listing) |
-| Shareholder under 20% | Neither | Neither | Neither | Neither |
+| Relationship to the target | SEC | AICPA | IESBA-PIE | IESBA | EU-537 |
+|---|---|---|---|---|---|
+| Target, parents, subsidiaries | Restricted | Restricted | Restricted | Restricted | Restricted |
+| Board, beneficial owner | Restricted | Restricted | Restricted | Restricted | Restricted |
+| Shareholder over 50% / CTP | Restricted | Restricted | Restricted | Restricted | Restricted |
+| Shareholder 20–50% | Materiality Check | Materiality Check | Materiality Check | Undetermined (needs listing) | Materiality Check |
+| Sibling / Cousin | Materiality Check | Materiality Check | Materiality Check | Undetermined (needs listing) | Materiality Check |
+| Close-affiliate-only | Materiality Check | Materiality Check | Materiality Check | Undetermined (needs listing) | Materiality Check |
+| Shareholder under 20% | Neither | Neither | Neither | Neither | Neither |
 
 ## Two rules that apply to every jurisdiction
 
@@ -132,5 +159,6 @@ Same table as IESBA-PIE, with one difference the skills do encode:
 ## Limits
 
 - The 20% and 50% bands are conventional proxies. Rule 2-01 does not define "control" or "significant influence".
-- GAO and DOL, and the EU and UK frameworks, are not covered here.
+- GAO and DOL are not covered here. The skills do not model their affiliate rules.
+- UK-FRC has no table of its own. It uses the EU-537 categories (see the EU section).
 - Materiality cannot be computed from the provider data. A Materiality Check row says a test applies.
