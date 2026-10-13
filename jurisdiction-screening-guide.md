@@ -4,129 +4,150 @@ For each audit rule, which relationship types (relative to the company being aud
 
 - **Restricted**: in scope by the relationship alone. No further test.
 - **Materiality Check**: in scope only if a materiality test is met.
+- **Out of scope**: the rule does not reach this relationship.
 
-The target can be anywhere in the tree. An entity can hold several relationships. Apply the strictest one (Restricted over Materiality Check).
+The target can be anywhere in the tree. An entity can hold several relationships. Apply the strictest one (Restricted over Materiality Check over Out of scope).
 
-Source: the `acct-independence-rules` and `acct-audit-rule-conflicts` skills. They use the same category assignment for every rule below. Where the rule text may differ from that, it is listed under **Note** and is unverified.
+## Where this comes from, and how far to trust it
+
+- The repo skills (`acct-independence-rules`, `acct-audit-rule-conflicts`) use **one shared table for every rule**. They do not model the differences below.
+- The differences come from web sources: rule summaries, commentary and a few primary-text excerpts. **I could not fetch the primary rule texts**, so each rule below ends with what is confirmed and what is not.
+- Verify against the official texts before relying on this: eCFR 17 CFR 210.2-01, AICPA ET 0.400.02, the IESBA Handbook glossary, and EUR-Lex 32014R0537.
+
+Relationship words: parent (ultimate, immediate, indirect), subsidiary (immediate, indirect), sibling and cousin (together: "common control"), significant influence.
 
 ---
 
 ## SEC
 
-17 CFR 210.2-01
+17 CFR 210.2-01(f)(4)
 
 **Restricted**
 - The target itself
-- Ultimate parent, immediate parent, indirect parent
-- Immediate subsidiary, indirect subsidiary
-- Board / management
-- Beneficial owner
-- Shareholder over 50% (or "CTP")
+- Parents
+- Subsidiaries
 
 **Materiality Check**
-- Shareholder 20–50%
-- Sibling, cousin (common control; the test has two legs, each material to the common parent)
-- Close-affiliate-only entity
+- Sibling, cousin: in scope only if the sibling **and** the target are each material to the common parent. The SEC added this two-sided test in 2020 (Release 33-10876). Before that, all common-control entities were in scope.
+- Entity over which the target has significant influence: in scope unless the entity is not material to the target.
 
-**Note:** whether the SEC rule adds a materiality condition for parents or subsidiaries is not confirmed.
+**Confirmed:** the 2020 sibling test; the downward significant-influence materiality condition.
+**Not confirmed:** the exact wording for parents and subsidiaries (no materiality condition appeared in the sources); the condition on the upward significant-influence prong.
 
 ---
 
 ## AICPA
 
-Code of Professional Conduct, ET 0.400.02
+Code of Professional Conduct, ET 0.400.02. The affiliate definition applies only to financial statement attest clients (ET 0.400.16).
 
 **Restricted**
 - The target itself
-- Ultimate parent, immediate parent, indirect parent
-- Immediate subsidiary, indirect subsidiary
-- Board / management
-- Beneficial owner
-- Shareholder over 50% (or "CTP")
+- Subsidiaries: entities the target controls (item a)
 
 **Materiality Check**
-- Shareholder 20–50%
-- Sibling, cousin (two-leg test)
-- Close-affiliate-only entity
+- Sibling, cousin: in scope if the sibling and the target are each material to the entity that controls both (item e).
+- Entity over which the target has significant influence: in scope if material to the target (item b).
 
-**Note:** whether AICPA's affiliate definition adds conditions beyond this is not confirmed.
+**Confirmed:** items a, b and e as described.
+**Not confirmed:** the conditions on parents and on the upward significant-influence item. The skills treat parents as Restricted.
 
 ---
 
 ## IESBA-PIE
 
-IESBA Code of Ethics, related entities (public interest entity audit client)
+IESBA Code of Ethics, related entities. Public interest entity audit client.
 
 **Restricted**
 - The target itself
-- Ultimate parent, immediate parent, indirect parent
-- Immediate subsidiary, indirect subsidiary
-- Board / management
-- Beneficial owner
-- Shareholder over 50% (or "CTP")
+- Subsidiaries: related entities the target controls
 
 **Materiality Check**
-- Shareholder 20–50%
-- Sibling, cousin (two-leg test)
-- Close-affiliate-only entity
+- Parent: one commentary says the definition excludes a parent where the target is immaterial to it, which makes this a Materiality Check.
+- Sibling, cousin: in scope if both are material to the controlling entity. The only source for this is a student quiz.
 
-**Note:** the skills do not say whether the IESBA non-listed exception (below) applies to a PIE. Confirm before assuming.
+**Confirmed:** for a publicly traded entity, the group audit client always includes its related entities.
+**Not confirmed:** the glossary wording itself; the parent condition (the commentary may predate the 2020 SEC change); the sibling test. The scope rule in the source turns on "publicly traded entity", not on PIE as such.
 
 ---
 
-## IESBA
+## IESBA (non-PIE)
 
-IESBA Code of Ethics, related entities (non-PIE audit client)
+IESBA Code of Ethics, related entities. Audit client that is not publicly traded.
 
 **Restricted**
 - The target itself
-- Ultimate parent, immediate parent, indirect parent
-- Immediate subsidiary, indirect subsidiary
-- Board / management
-- Beneficial owner
-- Shareholder over 50% (or "CTP")
+- Subsidiaries: related entities over which the target has direct or indirect control
 
-**Materiality Check** (only once the engagement is confirmed as listed)
-- Shareholder 20–50%
-- Sibling, cousin (two-leg test)
-- Close-affiliate-only entity
+**Out of scope (likely)**
+- Parents
+- Sibling, cousin
 
-If listing status is not confirmed, the Materiality Check types are left undetermined. Do not assume "non-listed".
-
-**Note:** the real non-PIE scope may be narrower than this (for example, parents and siblings may not be automatically in scope). Unverified.
+**Confirmed:** for a non-publicly traded entity, the group audit client includes only related entities the target controls.
+**Not confirmed:** whether parents and siblings are fully excluded, and any significant-influence rule.
 
 ---
 
 ## EU
 
-Regulation (EU) 537/2014, Art. 5
+Regulation (EU) 537/2014, Art. 5. Covers prohibited non-audit services. Network members of the audit firm are also covered.
 
 **Restricted**
-- The target itself
-- Ultimate parent, immediate parent, indirect parent
-- Immediate subsidiary, indirect subsidiary
-- Board / management
-- Beneficial owner
-- Shareholder over 50% (or "CTP")
+- The target itself (audited entity)
+- Parent undertaking
+- Controlled undertakings within the Union
 
-**Materiality Check**
-- Shareholder 20–50%
-- Sibling, cousin (two-leg test)
-- Close-affiliate-only entity
+**Out of scope**
+- Sibling, cousin (not named in Art. 5(1))
+- Controlled undertakings outside the Union
 
-**Note:** Art. 5 appears to cover the audited entity, its parent undertaking and its controlled undertakings within the Union. If so, siblings and cousins may be out of scope rather than a Materiality Check. Unverified.
+**Materiality Check:** none found.
 
-UK (Financial Reporting Council Ethical Standard) uses the same assignment as EU.
+**Confirmed:** Art. 5(1) names the audited entity, its parent undertaking and its controlled undertakings within the Union. Member States may apply stricter rules.
+**Not confirmed:** whether "controlled undertakings" includes indirect subsidiaries.
+
+### UK (Financial Reporting Council)
+
+The UK version of the Regulation replaces "controlled undertakings" with "subsidiary undertakings" and drops "within the Union". The UK scope is therefore wider on subsidiaries than the EU's.
 
 ---
 
-## Not in either list
+## Relationships the rule texts above do not cover
 
-- Shareholder under 20%, or shareholder with only undisclosed percentages: judgment under the general standard. Neither Restricted nor Materiality Check.
+These come only from the repo skills. I found no rule text for them. They are not split by rule.
 
-## Rules that apply to all of the above
+| Relationship to the target | Category in the skills |
+|---|---|
+| Board / management | Restricted |
+| Beneficial owner | Restricted |
+| Shareholder over 50% (or "CTP") | Restricted |
+| Shareholder 20–50% | Materiality Check |
+| Close-affiliate-only entity | Materiality Check |
+| Shareholder under 20%, or undisclosed percentages | Neither (judgment under the general standard) |
+
+## Summary by relationship
+
+| Relationship | SEC | AICPA | IESBA-PIE | IESBA non-PIE | EU |
+|---|---|---|---|---|---|
+| Parent | Restricted | Not confirmed | Materiality Check | Out of scope (likely) | Restricted |
+| Subsidiary | Restricted | Restricted | Restricted | Restricted | Restricted (within the Union) |
+| Sibling, cousin | Materiality Check | Materiality Check | Materiality Check | Out of scope (likely) | Out of scope |
+| Significant influence | Materiality Check (downward) | Materiality Check (downward) | Not confirmed | Not confirmed | Not covered |
+
+## Limits
 
 - A Materiality Check means a test applies. It does not mean the test was met.
-- Sibling and cousin are treated as one bucket (common control).
-- Investment company complexes (detected by name pattern, for example SVF, HoldCo, TopCo, L.P.) block Materiality Check types, which become undetermined. Parents stay Restricted.
+- The skills' investment company complex rule (name patterns such as SVF, HoldCo, TopCo, L.P.) makes Materiality Check rows undetermined. Parents stay Restricted. This is not from the rule texts.
 - The 20% and 50% bands are conventional proxies. The rules do not define "control" or "significant influence".
+- GAO and DOL are not covered.
+
+## Sources
+
+- [SEC comment letter comparing the SEC and AICPA affiliate definitions](https://www.sec.gov/comments/s7-26-19/s72619-7068515-215530.pdf)
+- [SEC Release 33-10876 (2020 final rule)](https://www.sec.gov/files/rules/final/2020/33-10876.pdf)
+- [Wilson Sonsini summary of the 2020 amendments](https://www.wsgr.com/en/insights/sec-adopts-amendments-to-auditor-independence-requirements.html)
+- [Journal of Accountancy, "Untangling client affiliates"](https://www.journalofaccountancy.com/issues/2022/aug/untangling-client-affiliates/)
+- [IRBA pronouncement on listed entity and PIE definitions](https://www.irba.co.za/upload/Final%20Pronouncement%20-%20Revisions%20to%20the%20Definitions%20of%20Listed%20Entity%20and%20Public%20Interest%20Entity_Nov%2023.pdf)
+- [Comparison of international standards with SEC/PCAOB rules](https://www.auditconduct.com/newsletters/comparing-international-independence-standards-for-nonaudit-services-to-sec-pcaob-independence-rules)
+- [Regulation 537/2014 Art. 5, Irish standards index](https://www.charteredaccountants.ie/chariotindex/text/ec_2014_537/5.html)
+- [Accountancy Europe briefing on non-audit services](https://www.accountancyeurope.eu/wp-content/uploads/BP_140825_-_Provision_of_NAS.pdf)
+- [UK version of Regulation 537/2014](https://www.legislation.gov.uk/uksi/2019/177/part/4/made)
